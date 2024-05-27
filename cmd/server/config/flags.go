@@ -27,7 +27,7 @@ func ParseFlags() ServerFlags {
 	}
 	// Регистрируем переменные:
 	// Строка с адресом и портом запуска сервиса должна получаться из переменной окружения RUN_ADDRESS или флага командной строки -a
-	flag.StringVar(&cfg.FlagRunAddr, "a", "localhost:8080", "Address and port to run server")
+	flag.StringVar(&cfg.FlagRunAddr, "a", "", "Address and port to run server")
 	// Строка с адресом подключения к БД должна получаться из переменной окружения DATABASE_DSN или флага командной строки -d
 	flag.StringVar(&cfg.FlagDatabaseURI, "d", "", "Database URI")
 	// Строка с адресом подключения к системt расчёта начислений должна получаться из переменной окружения ACCRUAL_SYSTEM_ADDRESS или флага командной строки -r
