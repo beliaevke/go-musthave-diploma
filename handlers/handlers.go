@@ -178,7 +178,7 @@ func UserRegisterHandler(databaseURI string) http.Handler {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if userID == -1 {
+			if userID != -1 {
 				http.Error(w, "user already exists with this login", http.StatusConflict)
 				return
 			}
