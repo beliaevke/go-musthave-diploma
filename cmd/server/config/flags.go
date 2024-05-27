@@ -29,7 +29,7 @@ func ParseFlags() ServerFlags {
 	// Строка с адресом и портом запуска сервиса должна получаться из переменной окружения RUN_ADDRESS или флага командной строки -a
 	flag.StringVar(&cfg.FlagRunAddr, "a", "localhost:8080", "Address and port to run server")
 	// Строка с адресом подключения к БД должна получаться из переменной окружения DATABASE_DSN или флага командной строки -d
-	flag.StringVar(&cfg.FlagDatabaseURI, "d", "postgres://postgres:pos111@localhost:5432/postgres?sslmode=disable", "Database URI")
+	flag.StringVar(&cfg.FlagDatabaseURI, "d", "", "Database URI")
 	// Строка с адресом подключения к системt расчёта начислений должна получаться из переменной окружения ACCRUAL_SYSTEM_ADDRESS или флага командной строки -r
 	flag.StringVar(&cfg.FlagASAddr, "r", "", "Accrual system address")
 	// парсим переданные серверу аргументы в зарегистрированные переменные

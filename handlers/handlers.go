@@ -38,7 +38,7 @@ type authenticationResponseWriter struct {
 	userID              int
 }
 
-const TOKEN_EXP = time.Minute * 5 //time.Second * 15
+const tokenExpiresAt = time.Minute * 5 //time.Second * 15
 
 func WithAuthentication(h http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +108,7 @@ func authenticateUser(w http.ResponseWriter, userID int) error {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			// когда создан токен
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TOKEN_EXP)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExpiresAt)),
 		},
 		// собственное утверждение
 		UserID: userID,
@@ -122,12 +122,12 @@ func authenticateUser(w http.ResponseWriter, userID int) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:    "session_token",
 		Value:   url.QueryEscape(tokenString),
-		Expires: time.Now().Add(TOKEN_EXP),
+		Expires: time.Now().Add(tokenExpiresAt),
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:    "session_key",
 		Value:   url.QueryEscape(string(key)),
-		Expires: time.Now().Add(TOKEN_EXP),
+		Expires: time.Now().Add(tokenExpiresAt),
 	})
 	return nil
 }
