@@ -9,8 +9,21 @@ CREATE TABLE Orders (
     userID bigint not null,
     orderNumber varchar(200) not null unique,
     orderStatus varchar(20),
-    accrual int,
+    accrual real default 0,
     uploadedAt timestamp default NULL
+);
+
+CREATE TABLE OrdersOperations (
+    userID bigint not null,
+    orderNumber varchar(200) not null,
+    pointsQuantity real default 0,
+    processedAt timestamp default NULL
+);
+
+CREATE TABLE UsersBalance (
+    userID bigint not null,
+    pointsSum real default 0,
+    pointsLoss real default 0
 );
 
 -- +goose Down

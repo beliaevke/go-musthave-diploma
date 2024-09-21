@@ -40,6 +40,29 @@ type User struct {
 	UserPassword string `json:"password"`
 }
 
+type Order struct {
+	OrderNumber string    `db:"orderNumber" json:"number"`
+	OrderStatus string    `db:"orderStatus" json:"status"`
+	Accrual     float32   `db:"accrual" json:"accrual,omitempty"`
+	UploadedAt  time.Time `db:"uploadedAt" json:"uploaded_at"`
+}
+
+type Balance struct {
+	PointsSum  float32 `db:"PointsSum" json:"current"`
+	PointsLoss float32 `db:"PointsLoss" json:"withdrawn"`
+}
+
+type Withdraw struct {
+	OrderNumber string  `json:"order"`
+	Sum         float32 `json:"sum"`
+}
+
+type Withdrawals struct {
+	OrderNumber    string    `db:"orderNumber" json:"order"`
+	PointsQuantity float32   `db:"pointsQuantity" json:"sum"`
+	ProcessedAt    time.Time `db:"processed_at" json:"processed_at"`
+}
+
 type RetryAfterError struct {
 	Config pgxpool.Config
 }
@@ -146,6 +169,21 @@ func (s *Settings) CreateUser(ctx context.Context, user User) error {
 		`, user.UserLogin, hashedPass)
 		if err != nil {
 			logger.Warnf("INSERT INTO Users: " + err.Error())
+			return err
+		}
+		user.UserID, err = s.GetUser(ctx, user.UserLogin)
+		if err != nil {
+			logger.Warnf("CreateUser ID : " + err.Error())
+			return err
+		}
+		_, err = dbpool.Exec(ctx, `
+			INSERT INTO public.usersbalance
+			(userID, pointsSum, pointsLoss)
+			VALUES
+			($1, $2, $3);
+		`, user.UserID, 100, 23.5)
+		if err != nil {
+			logger.Warnf("INSERT INTO balance: " + err.Error())
 			return err
 		}
 	case nil:
@@ -271,7 +309,7 @@ func (s *Settings) GetOrder(ctx context.Context, orderNumber string) (int, error
 		FROM
 			public.orders
 		WHERE
-		orders.orderNumber=$1
+			orders.orderNumber=$1
 	`, orderNumber)
 	switch err := result.Scan(&val); err {
 	case pgx.ErrNoRows:
@@ -281,6 +319,122 @@ func (s *Settings) GetOrder(ctx context.Context, orderNumber string) (int, error
 	case err:
 		logger.Warnf("Query GetOrder: " + err.Error())
 		return -1, err
+	}
+	return val, nil
+}
+
+func (s *Settings) GetOrders(ctx context.Context, userID int) ([]Order, error) {
+	var val []Order
+	dbpool, err := pgxpool.New(ctx, s.ConnStr)
+	if err != nil {
+		return val, err
+	}
+	defer dbpool.Close()
+	result, err := dbpool.Query(ctx, `
+		SELECT orderNumber, orderStatus, accrual, uploadedAt
+		FROM
+			public.orders
+		WHERE
+			orders.userID=$1
+		ORDER BY
+			orders.uploadedAt DESC
+	`, userID)
+	if err != nil {
+		logger.Warnf("Query GetOrders: " + err.Error())
+		return val, err
+	}
+	val, err = pgx.CollectRows(result, pgx.RowToStructByName[Order])
+	if err != nil {
+		logger.Warnf("CollectRows GetOrders: " + err.Error())
+		return val, err
+	}
+	return val, nil
+}
+
+func (s *Settings) GetBalance(ctx context.Context, userID int) (Balance, error) {
+	var val Balance
+	dbpool, err := pgxpool.New(ctx, s.ConnStr)
+	if err != nil {
+		return val, err
+	}
+	defer dbpool.Close()
+	result := dbpool.QueryRow(ctx, `
+		SELECT pointsSum, pointsLoss
+		FROM
+			public.usersbalance
+		WHERE
+			usersbalance.userID=$1
+	`, userID)
+	switch err := result.Scan(&val.PointsSum, &val.PointsLoss); err {
+	case pgx.ErrNoRows:
+		return val, nil
+	case nil:
+		return val, nil
+	case err:
+		logger.Warnf("Query GetBalance: " + err.Error())
+		return val, err
+	}
+	return val, nil
+}
+
+func (s *Settings) BalanceWithdraw(ctx context.Context, userID int, userBalance Balance, withdraw Withdraw) error {
+	dbpool, err := pgxpool.New(ctx, s.ConnStr)
+	if err != nil {
+		return err
+	}
+	defer dbpool.Close()
+	tx, err := dbpool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint
+	_, err = dbpool.Exec(ctx, `
+		INSERT INTO public.ordersoperations
+		(userID, orderNumber, pointsQuantity, processedAt)
+		VALUES
+		($1, $2, $3, $4)
+		`, userID, withdraw.OrderNumber, -withdraw.Sum, time.Now())
+	if err != nil {
+		logger.Warnf("INSERT INTO OrdersOperations: " + err.Error())
+		return err
+	}
+
+	_, err = dbpool.Exec(ctx, `
+		UPDATE public.usersbalance
+		SET pointssum=$1, pointsloss=$2
+		WHERE userID=$3;
+	`, userBalance.PointsSum-withdraw.Sum, userBalance.PointsLoss+withdraw.Sum, userID)
+	if err != nil {
+		logger.Warnf("UPDATE usersbalance: " + err.Error())
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *Settings) GetWithdrawals(ctx context.Context, userID int) ([]Withdrawals, error) {
+	var val []Withdrawals
+	dbpool, err := pgxpool.New(ctx, s.ConnStr)
+	if err != nil {
+		return val, err
+	}
+	defer dbpool.Close()
+	result, err := dbpool.Query(ctx, `
+		SELECT orderNumber, pointsQuantity, processedAt
+		FROM
+			public.ordersoperations
+		WHERE
+			ordersoperations.userID=$1 AND ordersoperations.pointsQuantity < 0
+		ORDER BY
+			ordersoperations.processedAt DESC
+	`, userID)
+	if err != nil {
+		logger.Warnf("Query GetWithdrawals: " + err.Error())
+		return val, err
+	}
+	val, err = pgx.CollectRows(result, pgx.RowToStructByName[Withdrawals])
+	if err != nil {
+		logger.Warnf("CollectRows GetWithdrawals: " + err.Error())
+		return val, err
 	}
 	return val, nil
 }

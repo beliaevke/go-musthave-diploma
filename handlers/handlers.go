@@ -26,6 +26,10 @@ type database interface {
 	LoginUser(ctx context.Context, login string, pass string) (int, error)
 	AddOrder(ctx context.Context, userID int, orderNumber string) error
 	GetOrder(ctx context.Context, orderNumber string) (int, error)
+	GetOrders(ctx context.Context, userID int) ([]postgres.Order, error)
+	GetBalance(ctx context.Context, userID int) (postgres.Balance, error)
+	BalanceWithdraw(ctx context.Context, userID int, userBalance postgres.Balance, withdraw postgres.Withdraw) error
+	GetWithdrawals(ctx context.Context, userID int) ([]postgres.Withdrawals, error)
 }
 
 type Claims struct {
@@ -259,26 +263,27 @@ func GetOrdersHandler(databaseURI string) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		var buf bytes.Buffer
-		// читаем тело запроса
-		n, err := buf.ReadFrom(r.Body)
-		if err != nil || n == 0 {
-			http.Error(w, "bad request", http.StatusBadRequest)
+
+		userID, err := strconv.Atoi(w.Header().Get("UID"))
+		if err != nil {
+			logger.Warnf("UID validate error: " + err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if r.Method == http.MethodPost && n != 0 {
+
+		if r.Method == http.MethodPost {
+			var buf bytes.Buffer
+			// читаем тело запроса
+			n, err := buf.ReadFrom(r.Body)
+			if err != nil || n == 0 {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 			responseString := buf.String()
 			err = goluhn.Validate(responseString)
 			if err != nil {
 				logger.Warnf("goluhn validate error: " + err.Error())
 				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-				return
-			}
-
-			userID, err := strconv.Atoi(w.Header().Get("UID"))
-			if err != nil {
-				logger.Warnf("UID validate error: " + err.Error())
-				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
@@ -304,6 +309,179 @@ func GetOrdersHandler(databaseURI string) http.Handler {
 			}
 
 			w.WriteHeader(http.StatusAccepted)
+		} else if r.Method == http.MethodGet {
+
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+
+			orders, err := db.GetOrders(ctx, userID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if len(orders) == 0 {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			encoder := json.NewEncoder(w)
+			err = encoder.Encode(&orders)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}
+	}
+	return http.HandlerFunc(fn)
+}
+
+func GetBalanceHandler(databaseURI string) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		db, err := setDB(databaseURI)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		userID, err := strconv.Atoi(w.Header().Get("UID"))
+		if err != nil {
+			logger.Warnf("UID validate error: " + err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if r.Method == http.MethodGet {
+
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+
+			balance, err := db.GetBalance(ctx, userID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			encoder := json.NewEncoder(w)
+			err = encoder.Encode(&balance)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}
+	}
+	return http.HandlerFunc(fn)
+}
+
+func PostBalanceWithdrawHandler(databaseURI string) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		db, err := setDB(databaseURI)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		userID, err := strconv.Atoi(w.Header().Get("UID"))
+		if err != nil {
+			logger.Warnf("UID validate error: " + err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if r.Method == http.MethodPost {
+
+			var buf bytes.Buffer
+			// читаем тело запроса
+			n, err := buf.ReadFrom(r.Body)
+			if err != nil || n == 0 {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			var withdraw postgres.Withdraw
+			err = retry.Do(func() error {
+				// десериализуем JSON в Visitor
+				if err = json.Unmarshal(buf.Bytes(), &withdraw); err != nil {
+					return err
+				}
+				return nil
+			},
+				retry.Attempts(3),
+				retry.Delay(1000*time.Millisecond),
+			)
+			if err != nil {
+				logger.Warnf("JSON error: " + err.Error())
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+
+			orderUID, err := db.GetOrder(ctx, withdraw.OrderNumber)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			} else if userID != orderUID {
+				http.Error(w, "incorrect order number", http.StatusUnprocessableEntity)
+				return
+			}
+
+			userBalance, err := db.GetBalance(ctx, userID)
+			if userBalance.PointsSum < withdraw.Sum {
+				http.Error(w, "there are insufficient funds in the account", http.StatusPaymentRequired)
+				return
+			}
+
+			err = db.BalanceWithdraw(ctx, userID, userBalance, withdraw)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+		}
+	}
+	return http.HandlerFunc(fn)
+}
+
+func GetWithdrawalsHandler(databaseURI string) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		db, err := setDB(databaseURI)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		userID, err := strconv.Atoi(w.Header().Get("UID"))
+		if err != nil {
+			logger.Warnf("UID validate error: " + err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if r.Method == http.MethodGet {
+
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+
+			withdrawals, err := db.GetWithdrawals(ctx, userID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if len(withdrawals) == 0 {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			encoder := json.NewEncoder(w)
+			err = encoder.Encode(&withdrawals)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
 		}
 	}
 	return http.HandlerFunc(fn)

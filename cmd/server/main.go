@@ -33,6 +33,9 @@ func run(cfg config.ServerFlags) error {
 	mux.Handle("/api/user/register", handlers.UserRegisterHandler(cfg.FlagDatabaseURI))
 	mux.Handle("/api/user/login", handlers.UserLoginHandler(cfg.FlagDatabaseURI))
 	mux.Handle("/api/user/orders", handlers.WithAuthentication(handlers.GetOrdersHandler(cfg.FlagDatabaseURI)))
+	mux.Handle("/api/user/balance", handlers.WithAuthentication(handlers.GetBalanceHandler(cfg.FlagDatabaseURI)))
+	mux.Handle("/api/user/balance/withdraw", handlers.WithAuthentication(handlers.PostBalanceWithdrawHandler(cfg.FlagDatabaseURI)))
+	mux.Handle("/api/user/withdrawals", handlers.WithAuthentication(handlers.GetWithdrawalsHandler(cfg.FlagDatabaseURI)))
 
 	return http.ListenAndServe(cfg.FlagRunAddr, mux)
 }
