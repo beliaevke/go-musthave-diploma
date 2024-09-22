@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"log"
+	"musthave-diploma/internal/logger"
 	"strings"
 
 	"github.com/caarlos0/env"
@@ -47,6 +48,7 @@ func ParseFlags() ServerFlags {
 	if cfg.EnvRunAddr != "" {
 		cfg.FlagRunAddr = cfg.EnvRunAddr
 	}
+	logger.Warnf("LOG " + cfg.FlagRunAddr + " - " + cfg.EnvRunAddr)
 	if cfg.EnvDatabaseURI != "" {
 		cfg.FlagDatabaseURI = cfg.EnvDatabaseURI
 	}
