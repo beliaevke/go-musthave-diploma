@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"log"
+	"strings"
 
 	"github.com/caarlos0/env"
 )
@@ -25,6 +26,12 @@ func ParseFlags() ServerFlags {
 	if err := env.Parse(cfg); err != nil {
 		log.Fatal(err)
 	}
+	cfg.EnvRunAddr = strings.ReplaceAll(cfg.EnvRunAddr, "\"", "")
+	cfg.EnvRunAddr = strings.ReplaceAll(cfg.EnvRunAddr, " ", "")
+	cfg.EnvDatabaseURI = strings.ReplaceAll(cfg.EnvDatabaseURI, "\"", "")
+	cfg.EnvDatabaseURI = strings.ReplaceAll(cfg.EnvDatabaseURI, " ", "")
+	cfg.EnvASAddr = strings.ReplaceAll(cfg.EnvASAddr, "\"", "")
+	cfg.EnvASAddr = strings.ReplaceAll(cfg.EnvASAddr, " ", "")
 	// Регистрируем переменные:
 	// Строка с адресом и портом запуска сервиса должна получаться из переменной окружения RUN_ADDRESS или флага командной строки -a
 	flag.StringVar(&cfg.FlagRunAddr, "a", "localhost:8080", "Address and port to run server")
