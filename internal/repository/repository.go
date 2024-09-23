@@ -105,7 +105,7 @@ func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
 			(userID, pointsSum, pointsLoss)
 			VALUES
 			($1, $2, $3);
-		`, userID, 100, 23.5)
+		`, userID, 0, 0)
 		if err != nil {
 			logger.Warnf("INSERT INTO balance: " + err.Error())
 			return err

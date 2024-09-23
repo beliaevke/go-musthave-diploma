@@ -58,8 +58,8 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
-			} else if userID == orderUID {
-				w.WriteHeader(http.StatusAccepted) //w.WriteHeader(http.StatusOK)
+			} else if userID == orderUID && orderUID != -1 {
+				w.WriteHeader(http.StatusOK)
 				return
 			} else if userID != orderUID && orderUID != -1 {
 				http.Error(w, "order already exists with another user", http.StatusConflict)
