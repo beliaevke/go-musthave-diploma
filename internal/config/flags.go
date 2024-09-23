@@ -2,7 +2,9 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/caarlos0/env"
@@ -20,12 +22,17 @@ type ServerFlags struct {
 // parseFlags обрабатывает аргументы командной строки
 // и сохраняет их значения в соответствующих переменных
 func ParseFlags() ServerFlags {
+	fmt.Fprintln(os.Stdout, "read flags")
 	// для случаев, когда в переменных окружения присутствует непустое значение,
 	// переопределим их, даже если они были переданы через аргументы командной строки
-	cfg := new(ServerFlags)
+	cfg := &ServerFlags{}
 	if err := env.Parse(cfg); err != nil {
 		log.Fatal(err)
 	}
+	fmt.Fprintln(os.Stdout, " flags 0")
+	fmt.Fprintln(os.Stdout, cfg.EnvRunAddr)
+	fmt.Fprintln(os.Stdout, cfg.EnvDatabaseURI)
+	fmt.Fprintln(os.Stdout, cfg.EnvASAddr)
 
 	cfg.EnvRunAddr = strings.ReplaceAll(cfg.EnvRunAddr, "\"", "")
 	cfg.EnvRunAddr = strings.ReplaceAll(cfg.EnvRunAddr, " ", "")
@@ -44,6 +51,11 @@ func ParseFlags() ServerFlags {
 	// парсим переданные серверу аргументы в зарегистрированные переменные
 	flag.Parse()
 
+	fmt.Fprintln(os.Stdout, " flags 1")
+	fmt.Fprintln(os.Stdout, cfg.FlagRunAddr)
+	fmt.Fprintln(os.Stdout, cfg.FlagDatabaseURI)
+	fmt.Fprintln(os.Stdout, cfg.FlagASAddr)
+
 	// для случаев, когда в переменной окружения присутствует непустое значение,
 	// используем его, даже если значение было передано через аргумент командной строки
 	if cfg.EnvRunAddr != "" {
@@ -56,5 +68,11 @@ func ParseFlags() ServerFlags {
 	if cfg.EnvASAddr != "" {
 		cfg.FlagASAddr = cfg.EnvASAddr
 	}
+
+	fmt.Fprintln(os.Stdout, " flags 2")
+	fmt.Fprintln(os.Stdout, cfg.FlagRunAddr)
+	fmt.Fprintln(os.Stdout, cfg.FlagDatabaseURI)
+	fmt.Fprintln(os.Stdout, cfg.FlagASAddr)
+
 	return *cfg
 }
