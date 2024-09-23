@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"musthave-diploma/internal/config"
-	"musthave-diploma/internal/db/migrations"
 	"musthave-diploma/internal/db/postgres"
 	"musthave-diploma/internal/handlers/balance"
 	"musthave-diploma/internal/handlers/orders"
@@ -28,10 +27,10 @@ func main() {
 	ctx := context.Background()
 	fmt.Fprintln(os.Stdout, "start  FlagDatabaseURI")
 	if cfg.FlagDatabaseURI != "" {
-		err := migrations.InitDB(ctx, cfg.FlagDatabaseURI)
+		/*err := migrations.InitDB(ctx, cfg.FlagDatabaseURI)
 		if err != nil {
 			logger.Warnf("InitDB fail: " + err.Error())
-		}
+		}*/
 		dbpool, err := postgres.SetDB(ctx, cfg.FlagDatabaseURI)
 		if err != nil {
 			logger.Warnf("SetDB fail: " + err.Error())
