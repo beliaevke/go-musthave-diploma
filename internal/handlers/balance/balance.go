@@ -107,6 +107,10 @@ func PostBalanceWithdrawHandler(dbpool *pgxpool.Pool) http.Handler {
 			}
 
 			userBalance, err := db.GetBalance(ctx, dbpool, userID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			if userBalance.PointsSum < withdraw.Sum {
 				http.Error(w, "there are insufficient funds in the account", http.StatusPaymentRequired)
 				return

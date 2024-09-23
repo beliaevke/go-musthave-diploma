@@ -248,6 +248,62 @@ func (o *Order) GetOrders(ctx context.Context, dbpool *pgxpool.Pool, userID int)
 	return val, nil
 }
 
+func GetAwaitOrders(ctx context.Context, dbpool *pgxpool.Pool) ([]Order, error) {
+	var val []Order
+	result, err := dbpool.Query(ctx, `
+		SELECT ordernumber, orderstatus, accrual, uploadedat
+		FROM
+			public.orders
+		WHERE
+			orders.orderstatus != 'INVALID' AND orders.orderstatus != 'PROCESSED'
+		ORDER BY
+			orders.uploadedat
+	`)
+	if err != nil {
+		logger.Warnf("Query GetAwaitOrders: " + err.Error())
+		return val, err
+	}
+	val, err = pgx.CollectRows(result, pgx.RowToStructByName[Order])
+	if err != nil {
+		logger.Warnf("CollectRows GetAwaitOrders: " + err.Error())
+		return val, err
+	}
+	return val, nil
+}
+
+func UpdateOrder(ctx context.Context, dbpool *pgxpool.Pool, orderUID int, o Order) error {
+	tx, err := dbpool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint
+	_, err = dbpool.Exec(ctx, `
+		INSERT INTO public.ordersoperations
+		(userID, orderNumber, pointsQuantity, processedAt)
+		VALUES
+		($1, $2, $3, $4)
+		`, orderUID, o.OrderNumber, o.Accrual, time.Now())
+	if err != nil {
+		logger.Warnf("INSERT INTO UpdateOrder: " + err.Error())
+		return err
+	}
+	userBalance, err := NewBalance().GetBalance(ctx, dbpool, orderUID)
+	if err != nil {
+		logger.Warnf("userBalance read: " + err.Error())
+		return err
+	}
+	_, err = dbpool.Exec(ctx, `
+		UPDATE public.usersbalance
+		SET pointssum=$1
+		WHERE userID=$3;
+	`, userBalance.PointsSum+o.Accrual, orderUID)
+	if err != nil {
+		logger.Warnf("UPDATE usersbalance++: " + err.Error())
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (b *Balance) GetBalance(ctx context.Context, dbpool *pgxpool.Pool, userID int) (Balance, error) {
 	var val Balance
 	result := dbpool.QueryRow(ctx, `
@@ -292,7 +348,7 @@ func (b *Balance) BalanceWithdraw(ctx context.Context, dbpool *pgxpool.Pool, use
 		WHERE userID=$3;
 	`, userBalance.PointsSum-withdraw.Sum, userBalance.PointsLoss+withdraw.Sum, userID)
 	if err != nil {
-		logger.Warnf("UPDATE usersbalance: " + err.Error())
+		logger.Warnf("UPDATE usersbalance--: " + err.Error())
 		return err
 	}
 	return tx.Commit(ctx)

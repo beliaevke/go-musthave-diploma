@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"musthave-diploma/internal/config"
 	"musthave-diploma/internal/db/migrations"
@@ -33,6 +34,7 @@ func main() {
 		if err := run(cfg, dbpool); err != nil {
 			log.Fatal(err)
 		}
+		checkOrders(cfg, dbpool)
 	} else {
 		logger.Warnf("Database URI is empty")
 	}
@@ -52,4 +54,11 @@ func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
 	mux.Handle("/api/user/withdrawals", authentication.WithAuthentication(balance.GetWithdrawalsHandler(dbpool)))
 
 	return http.ListenAndServe(cfg.FlagRunAddr, mux)
+}
+
+func checkOrders(cfg config.ServerFlags, dbpool *pgxpool.Pool) {
+	f := func() {
+		orders.SendOrdersHandler(dbpool, cfg.FlagASAddr)
+	}
+	time.AfterFunc(5*time.Second, f)
 }
