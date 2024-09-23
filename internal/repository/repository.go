@@ -1,29 +1,18 @@
-package postgres
+package repository
 
 import (
 	"context"
 	"crypto/md5"
-	"database/sql"
-	"embed"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
 	"musthave-diploma/internal/logger"
 
-	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
-
-	"github.com/avast/retry-go/v4"
 )
-
-//go:embed migrations/*.sql
-var embedMigrations embed.FS
 
 type Settings struct {
 	User    string
@@ -40,16 +29,32 @@ type User struct {
 	UserPassword string `json:"password"`
 }
 
+func NewUser(id int, login string, pass string) *User {
+	return &User{
+		UserID:       id,
+		UserLogin:    login,
+		UserPassword: pass,
+	}
+}
+
 type Order struct {
-	OrderNumber string    `db:"orderNumber" json:"number"`
-	OrderStatus string    `db:"orderStatus" json:"status"`
+	OrderNumber string    `db:"ordernumber" json:"number"`
+	OrderStatus string    `db:"orderstatus" json:"status"`
 	Accrual     float32   `db:"accrual" json:"accrual,omitempty"`
-	UploadedAt  time.Time `db:"uploadedAt" json:"uploaded_at"`
+	UploadedAt  time.Time `db:"uploadedat" json:"uploaded_at"`
+}
+
+func NewOrder() *Order {
+	return &Order{}
 }
 
 type Balance struct {
-	PointsSum  float32 `db:"PointsSum" json:"current"`
-	PointsLoss float32 `db:"PointsLoss" json:"withdrawn"`
+	PointsSum  float32 `db:"pointssum" json:"current"`
+	PointsLoss float32 `db:"pointsloss" json:"withdrawn"`
+}
+
+func NewBalance() *Balance {
+	return &Balance{}
 }
 
 type Withdraw struct {
@@ -58,93 +63,12 @@ type Withdraw struct {
 }
 
 type Withdrawals struct {
-	OrderNumber    string    `db:"orderNumber" json:"order"`
-	PointsQuantity float32   `db:"pointsQuantity" json:"sum"`
-	ProcessedAt    time.Time `db:"processed_at" json:"processed_at"`
+	OrderNumber    string    `db:"ordernumber" json:"order"`
+	PointsQuantity float32   `db:"pointsquantity" json:"sum"`
+	ProcessedAt    time.Time `db:"processedat" json:"processed_at"`
 }
 
-type RetryAfterError struct {
-	Config pgxpool.Config
-}
-
-func (err RetryAfterError) Error() string {
-	return fmt.Sprintf(
-		"Connection to %v error: %v",
-		err.Config.ConnString(),
-		err.Config.ConnConfig.OnPgError,
-	)
-}
-
-type SomeOtherError struct {
-	err        string
-	retryAfter time.Duration
-}
-
-func (err SomeOtherError) Error() string {
-	return err.err
-}
-
-func NewPSQL(user string, pass string, host string, port string, db string) Settings {
-	return Settings{
-		User:   user,
-		Pass:   pass,
-		Host:   host,
-		Port:   port,
-		DBName: db,
-		ConnStr: fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-			host+":"+port, user, pass, db),
-	}
-}
-
-func NewPSQLStr(connection string) *Settings {
-	return &Settings{
-		ConnStr: connection,
-	}
-}
-
-func (s *Settings) Ping(ctx context.Context) error {
-	err := retry.Do(func() error {
-		dbpool, err := pgxpool.New(ctx, s.ConnStr)
-		if err != nil {
-			return err
-		}
-		defer dbpool.Close()
-		err = dbpool.Ping(ctx)
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-		retry.RetryIf(func(errAttempt error) bool {
-			var pgErr *pgconn.PgError
-			if errors.As(errAttempt, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code) {
-				return true
-			}
-			return false
-		}),
-		retry.Attempts(3),
-		retry.Delay(time.Second),
-		retry.DelayType(func(n uint, err error, config *retry.Config) time.Duration {
-			switch e := err.(type) {
-			case RetryAfterError:
-				return 2 * time.Second
-			case SomeOtherError:
-				return e.retryAfter
-			}
-			//default is backoffdelay
-			return retry.BackOffDelay(n, err, config)
-		}),
-		retry.Context(ctx),
-	)
-	return err
-}
-
-func (s *Settings) CreateUser(ctx context.Context, user User) error {
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return err
-	}
-	defer dbpool.Close()
+func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
 	tx, err := dbpool.Begin(ctx)
 	if err != nil {
 		return err
@@ -156,22 +80,22 @@ func (s *Settings) CreateUser(ctx context.Context, user User) error {
 			public.users
 		WHERE
 		users.userLogin=$1
-		`, user.UserLogin)
-	switch err := result.Scan(&user.UserLogin); err {
+		`, u.UserLogin)
+	switch err := result.Scan(&u.UserLogin); err {
 	case pgx.ErrNoRows:
-		hash := md5.Sum([]byte(user.UserPassword))
+		hash := md5.Sum([]byte(u.UserPassword))
 		hashedPass := hex.EncodeToString(hash[:])
 		_, err = dbpool.Exec(ctx, `
 			INSERT INTO public.users
 			(userLogin, userPassword)
 			VALUES
 			($1, $2);
-		`, user.UserLogin, hashedPass)
+		`, u.UserLogin, hashedPass)
 		if err != nil {
 			logger.Warnf("INSERT INTO Users: " + err.Error())
 			return err
 		}
-		user.UserID, err = s.GetUser(ctx, user.UserLogin)
+		userID, err := u.GetUser(ctx, dbpool)
 		if err != nil {
 			logger.Warnf("CreateUser ID : " + err.Error())
 			return err
@@ -181,7 +105,7 @@ func (s *Settings) CreateUser(ctx context.Context, user User) error {
 			(userID, pointsSum, pointsLoss)
 			VALUES
 			($1, $2, $3);
-		`, user.UserID, 100, 23.5)
+		`, userID, 100, 23.5)
 		if err != nil {
 			logger.Warnf("INSERT INTO balance: " + err.Error())
 			return err
@@ -199,40 +123,28 @@ func (s *Settings) CreateUser(ctx context.Context, user User) error {
 	return tx.Commit(ctx)
 }
 
-func (s *Settings) GetUser(ctx context.Context, login string) (int, error) {
-	var val int
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return -1, err
-	}
-	defer dbpool.Close()
+func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 	result := dbpool.QueryRow(ctx, `
 		SELECT users.userID
 		FROM
 			public.users
 		WHERE
 		users.userLogin=$1
-	`, login)
-	switch err := result.Scan(&val); err {
+	`, u.UserLogin)
+	switch err := result.Scan(u.UserID); err {
 	case pgx.ErrNoRows:
 		return -1, nil
 	case nil:
-		return val, nil
+		return u.UserID, nil
 	case err:
 		logger.Warnf("Query GetUser: " + err.Error())
-		return -1, err
+		return -1, nil
 	}
-	return val, nil
+	return u.UserID, nil
 }
 
-func (s *Settings) LoginUser(ctx context.Context, login string, pass string) (int, error) {
-	var userID int
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return -1, err
-	}
-	defer dbpool.Close()
-	hash := md5.Sum([]byte(pass))
+func (u *User) LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
+	hash := md5.Sum([]byte(u.UserPassword))
 	hashedPass := hex.EncodeToString(hash[:])
 	result := dbpool.QueryRow(ctx, `
 		SELECT users.userID
@@ -240,25 +152,20 @@ func (s *Settings) LoginUser(ctx context.Context, login string, pass string) (in
 			public.users
 		WHERE
 		users.userLogin=$1 AND users.userPassword = $2
-	`, login, hashedPass)
-	switch err := result.Scan(&userID); err {
+	`, u.UserLogin, hashedPass)
+	switch err := result.Scan(&u.UserID); err {
 	case pgx.ErrNoRows:
 		return -1, nil
 	case nil:
-		return userID, nil
+		return u.UserID, nil
 	case err:
 		logger.Warnf("Query LoginUser: " + err.Error())
-		return -1, err
+		return -1, nil
 	}
-	return userID, nil
+	return u.UserID, nil
 }
 
-func (s *Settings) AddOrder(ctx context.Context, userID int, orderNumber string) error {
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return err
-	}
-	defer dbpool.Close()
+func (o *Order) AddOrder(ctx context.Context, dbpool *pgxpool.Pool, userID int, orderNumber string) error {
 	tx, err := dbpool.Begin(ctx)
 	if err != nil {
 		return err
@@ -269,14 +176,14 @@ func (s *Settings) AddOrder(ctx context.Context, userID int, orderNumber string)
 		FROM
 			public.orders
 		WHERE
-		orders.orderNumber=$1
+		orders.ordernumber=$1
 		`, orderNumber)
 	var orderStatus string
 	switch err := result.Scan(&orderStatus); err {
 	case pgx.ErrNoRows:
 		_, err = dbpool.Exec(ctx, `
 			INSERT INTO public.orders
-			(userID, orderNumber, orderStatus, uploadedAt)
+			(userID, ordernumber, orderstatus, uploadedat)
 			VALUES
 			($1, $2, $3, $4);
 		`, userID, orderNumber, "NEW", time.Now())
@@ -297,19 +204,14 @@ func (s *Settings) AddOrder(ctx context.Context, userID int, orderNumber string)
 	return tx.Commit(ctx)
 }
 
-func (s *Settings) GetOrder(ctx context.Context, orderNumber string) (int, error) {
+func (o *Order) GetOrder(ctx context.Context, dbpool *pgxpool.Pool, orderNumber string) (int, error) {
 	var val int
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return -1, err
-	}
-	defer dbpool.Close()
 	result := dbpool.QueryRow(ctx, `
 		SELECT orders.userID
 		FROM
 			public.orders
 		WHERE
-			orders.orderNumber=$1
+			orders.ordernumber=$1
 	`, orderNumber)
 	switch err := result.Scan(&val); err {
 	case pgx.ErrNoRows:
@@ -323,21 +225,16 @@ func (s *Settings) GetOrder(ctx context.Context, orderNumber string) (int, error
 	return val, nil
 }
 
-func (s *Settings) GetOrders(ctx context.Context, userID int) ([]Order, error) {
+func (o *Order) GetOrders(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]Order, error) {
 	var val []Order
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return val, err
-	}
-	defer dbpool.Close()
 	result, err := dbpool.Query(ctx, `
-		SELECT orderNumber, orderStatus, accrual, uploadedAt
+		SELECT ordernumber, orderstatus, accrual, uploadedat
 		FROM
 			public.orders
 		WHERE
 			orders.userID=$1
 		ORDER BY
-			orders.uploadedAt DESC
+			orders.uploadedat DESC
 	`, userID)
 	if err != nil {
 		logger.Warnf("Query GetOrders: " + err.Error())
@@ -351,13 +248,8 @@ func (s *Settings) GetOrders(ctx context.Context, userID int) ([]Order, error) {
 	return val, nil
 }
 
-func (s *Settings) GetBalance(ctx context.Context, userID int) (Balance, error) {
+func (b *Balance) GetBalance(ctx context.Context, dbpool *pgxpool.Pool, userID int) (Balance, error) {
 	var val Balance
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return val, err
-	}
-	defer dbpool.Close()
 	result := dbpool.QueryRow(ctx, `
 		SELECT pointsSum, pointsLoss
 		FROM
@@ -377,12 +269,7 @@ func (s *Settings) GetBalance(ctx context.Context, userID int) (Balance, error) 
 	return val, nil
 }
 
-func (s *Settings) BalanceWithdraw(ctx context.Context, userID int, userBalance Balance, withdraw Withdraw) error {
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return err
-	}
-	defer dbpool.Close()
+func (b *Balance) BalanceWithdraw(ctx context.Context, dbpool *pgxpool.Pool, userID int, userBalance Balance, withdraw Withdraw) error {
 	tx, err := dbpool.Begin(ctx)
 	if err != nil {
 		return err
@@ -411,13 +298,8 @@ func (s *Settings) BalanceWithdraw(ctx context.Context, userID int, userBalance 
 	return tx.Commit(ctx)
 }
 
-func (s *Settings) GetWithdrawals(ctx context.Context, userID int) ([]Withdrawals, error) {
+func (b *Balance) GetWithdrawals(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]Withdrawals, error) {
 	var val []Withdrawals
-	dbpool, err := pgxpool.New(ctx, s.ConnStr)
-	if err != nil {
-		return val, err
-	}
-	defer dbpool.Close()
 	result, err := dbpool.Query(ctx, `
 		SELECT orderNumber, pointsQuantity, processedAt
 		FROM
@@ -437,22 +319,4 @@ func (s *Settings) GetWithdrawals(ctx context.Context, userID int) ([]Withdrawal
 		return val, err
 	}
 	return val, nil
-}
-
-func SetDB(ctx context.Context, databaseURI string) {
-	db, err := sql.Open("pgx", databaseURI)
-	if err != nil {
-		logger.Warnf("sql.Open(): " + err.Error())
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			logger.Warnf("goose: failed to close DB: " + err.Error())
-		}
-	}()
-	goose.SetBaseFS(embedMigrations)
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := goose.UpContext(ctx, db, "migrations"); err != nil {
-		logger.Warnf("goose up: run failed  " + err.Error())
-	}
 }

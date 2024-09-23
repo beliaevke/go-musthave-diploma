@@ -29,3 +29,5 @@ CREATE TABLE UsersBalance (
 -- +goose Down
 DROP TABLE Users;
 DROP TABLE Orders;
+DROP TABLE OrdersOperations;
+DROP TABLE UsersBalance;

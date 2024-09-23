@@ -5,37 +5,51 @@ import (
 	"log"
 	"net/http"
 
-	"musthave-diploma/cmd/server/config"
-	"musthave-diploma/handlers"
+	"musthave-diploma/internal/config"
+	"musthave-diploma/internal/db/migrations"
+	"musthave-diploma/internal/db/postgres"
+	"musthave-diploma/internal/handlers/balance"
+	"musthave-diploma/internal/handlers/orders"
+	"musthave-diploma/internal/handlers/users"
 	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/postgres"
+	"musthave-diploma/internal/middleware/authentication"
 
 	"github.com/go-chi/chi"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
 	cfg := config.ParseFlags()
 	ctx := context.Background()
 	if cfg.FlagDatabaseURI != "" {
-		postgres.SetDB(ctx, cfg.FlagDatabaseURI)
-	}
-	if err := run(cfg); err != nil {
-		log.Fatal(err)
+		err := migrations.InitDB(ctx, cfg.FlagDatabaseURI)
+		if err != nil {
+			logger.Warnf("InitDB fail: " + err.Error())
+		}
+		dbpool, err := postgres.SetDB(ctx, cfg.FlagDatabaseURI)
+		if err != nil {
+			logger.Warnf("SetDB fail: " + err.Error())
+		}
+		if err := run(cfg, dbpool); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		logger.Warnf("Database URI is empty")
 	}
 }
 
-func run(cfg config.ServerFlags) error {
+func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
 	logger.ServerRunningInfo(cfg.FlagRunAddr)
 
 	mux := chi.NewMux()
 	mux.Use(logger.WithLogging)
 
-	mux.Handle("/api/user/register", handlers.UserRegisterHandler(cfg.FlagDatabaseURI))
-	mux.Handle("/api/user/login", handlers.UserLoginHandler(cfg.FlagDatabaseURI))
-	mux.Handle("/api/user/orders", handlers.WithAuthentication(handlers.GetOrdersHandler(cfg.FlagDatabaseURI)))
-	mux.Handle("/api/user/balance", handlers.WithAuthentication(handlers.GetBalanceHandler(cfg.FlagDatabaseURI)))
-	mux.Handle("/api/user/balance/withdraw", handlers.WithAuthentication(handlers.PostBalanceWithdrawHandler(cfg.FlagDatabaseURI)))
-	mux.Handle("/api/user/withdrawals", handlers.WithAuthentication(handlers.GetWithdrawalsHandler(cfg.FlagDatabaseURI)))
+	mux.Handle("/api/user/register", users.UserRegisterHandler(dbpool))
+	mux.Handle("/api/user/login", users.UserLoginHandler(dbpool))
+	mux.Handle("/api/user/orders", authentication.WithAuthentication(orders.GetOrdersHandler(dbpool)))
+	mux.Handle("/api/user/balance", authentication.WithAuthentication(balance.GetBalanceHandler(dbpool)))
+	mux.Handle("/api/user/balance/withdraw", authentication.WithAuthentication(balance.PostBalanceWithdrawHandler(dbpool)))
+	mux.Handle("/api/user/withdrawals", authentication.WithAuthentication(balance.GetWithdrawalsHandler(dbpool)))
 
 	return http.ListenAndServe(cfg.FlagRunAddr, mux)
 }

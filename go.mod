@@ -8,7 +8,6 @@ require (
 	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/go-chi/chi v1.5.5
 	github.com/golang-jwt/jwt/v4 v4.5.0
-	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/pressly/goose/v3 v3.22.1
 	go.uber.org/zap v1.27.0
