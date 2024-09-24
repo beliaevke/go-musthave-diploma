@@ -79,21 +79,26 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 			w.WriteHeader(http.StatusAccepted)
 		} else if r.Method == http.MethodGet {
 
+			fmt.Println("=========================Get orders start")
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
 
 			orders, err := db.GetOrders(ctx, dbpool, userID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				fmt.Println("=========================Get orders err 1")
 				return
 			}
 			if len(orders) == 0 {
 				http.Error(w, "orders not found", http.StatusNoContent) // w.WriteHeader(http.StatusNoContent)
+				fmt.Println("=========================Get orders orders not found")
 				return
 			}
+			fmt.Println("=========================Get orders 1")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(orders)
+			fmt.Println("=========================Get orders end")
 		}
 	}
 	return http.HandlerFunc(fn)
