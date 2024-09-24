@@ -317,7 +317,7 @@ func UpdateOrder(ctx context.Context, dbpool *pgxpool.Pool, orderUID int, o Orde
 	_, err = dbpool.Exec(ctx, `
 		UPDATE public.usersbalance
 		SET pointssum=$1
-		WHERE userID=$3;
+		WHERE userID=$2;
 	`, userBalance.PointsSum+o.Accrual, orderUID)
 	if err != nil {
 		logger.Warnf("UPDATE usersbalance++: " + err.Error())
