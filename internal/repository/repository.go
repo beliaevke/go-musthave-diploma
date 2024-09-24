@@ -139,7 +139,7 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 		WHERE
 		users.userLogin=$1
 	`, u.UserLogin)
-	switch err := result.Scan(u.UserID); err {
+	switch err := result.Scan(&u.UserID); err {
 	case pgx.ErrNoRows:
 		return -1, nil
 	case nil:
