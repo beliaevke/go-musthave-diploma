@@ -29,7 +29,7 @@ func initDB() database {
 
 func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+
 		db := initDB()
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
 		if err != nil {
@@ -39,6 +39,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 		}
 
 		if r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "text/plain")
 			var buf bytes.Buffer
 			// читаем тело запроса
 			n, err := buf.ReadFrom(r.Body)
@@ -77,6 +78,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 
 			w.WriteHeader(http.StatusAccepted)
 		} else if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
 
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
