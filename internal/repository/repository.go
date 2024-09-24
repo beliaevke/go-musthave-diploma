@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"strconv"
 	"time"
 
 	"musthave-diploma/internal/logger"
@@ -146,11 +147,11 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 	case err:
 		var PassIsEmpty string
 		if u.UserPassword == "" {
-			PassIsEmpty = "PASS is empty"
+			PassIsEmpty = " -- PASS is empty"
 		} else {
-			PassIsEmpty = "PASS is not empty"
+			PassIsEmpty = " -- PASS is not empty"
 		}
-		logger.Warnf("Query GetUser: " + err.Error() + "USER: " + u.UserLogin + PassIsEmpty)
+		logger.Warnf("Query GetUser: " + err.Error() + " ID: " + strconv.Itoa(u.UserID) + " USER: " + u.UserLogin + PassIsEmpty)
 		return -1, nil
 	}
 	return u.UserID, nil
