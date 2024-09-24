@@ -78,7 +78,6 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 
 			w.WriteHeader(http.StatusAccepted)
 		} else if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
 
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
@@ -89,16 +88,12 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 				return
 			}
 			if len(orders) == 0 {
-				w.WriteHeader(http.StatusNoContent)
+				http.Error(w, "orders not found", http.StatusNoContent) // w.WriteHeader(http.StatusNoContent)
 				return
 			}
-			encoder := json.NewEncoder(w)
-			err = encoder.Encode(&orders)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(orders)
 		}
 	}
 	return http.HandlerFunc(fn)
