@@ -81,7 +81,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 		} else if r.Method == http.MethodGet {
 
 			fmt.Println("=========================Get orders start")
-			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 			defer cancel()
 
 			orders, err := db.GetOrders(ctx, dbpool, userID)
