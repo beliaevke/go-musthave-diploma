@@ -64,6 +64,11 @@ func WithAuthentication(h http.Handler) http.Handler {
 			return
 		}
 
+		if claims.UserID == -1 {
+			http.Error(w, "UserID is incorrect", http.StatusUnauthorized)
+			return
+		}
+
 		aw := authenticationResponseWriter{
 			ResponseWriter: w, // встраиваем оригинальный http.ResponseWriter
 			userID:         claims.UserID,
