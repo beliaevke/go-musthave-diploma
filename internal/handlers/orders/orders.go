@@ -72,15 +72,12 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 
 			err = db.AddOrder(ctx, dbpool, userID, responseString)
 			if err != nil {
-				fmt.Println("=========================AddOrder " + " -- " + strconv.Itoa(userID) + " -- " + strconv.Itoa(orderUID) + " -- " + responseString)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 			w.WriteHeader(http.StatusAccepted)
 		} else if r.Method == http.MethodGet {
-
-			fmt.Println("=========================Get orders start")
 			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 			defer cancel()
 
@@ -90,12 +87,10 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusNoContent)
 				json.NewEncoder(w).Encode(orders)
-				fmt.Println("=========================Get orders err 1")
 				return
 			}
 			if len(orders) == 0 {
 				http.Error(w, "orders not found", http.StatusNoContent) // w.WriteHeader(http.StatusNoContent)
-				fmt.Println("=========================Get orders orders not found")
 				return
 			}
 			fmt.Println("=========================Get orders 1")
@@ -114,7 +109,7 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 	client := &http.Client{}
 
 	url := fmt.Sprintf("%s/api/orders/%v", FlagASAddr, o.OrderNumber)
-
+	fmt.Println("!!=======================SendOrders " + url)
 	var body []byte
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bytes.NewBuffer(body))
 	if err != nil {
@@ -129,10 +124,12 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 	if err != nil {
 		return err
 	}
+	fmt.Println("!!=======================SendOrders OrderNumber " + o.OrderNumber)
 	orderUID, err := initDB().GetOrder(ctx, dbpool, o.OrderNumber)
 	if err != nil {
 		return err
 	}
+	fmt.Println("!!=======================SendOrders start")
 	if response.StatusCode == http.StatusNoContent {
 		o.OrderStatus = "INVALID"
 		repository.UpdateOrder(ctx, dbpool, orderUID, o)
@@ -149,6 +146,7 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 		Status  string  `json:"status"`
 		Accrual float32 `json:"accrual"`
 	}
+	fmt.Println("!!=======================SendOrders respBody")
 	err = json.Unmarshal(body, &respBody)
 	if err != nil {
 		logger.Warnf("unmarshal response body error")
@@ -162,6 +160,7 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 	} else {
 		o.OrderStatus = "PROCESSING"
 	}
+	fmt.Println("!!=======================SendOrders UpdateOrder")
 	repository.UpdateOrder(ctx, dbpool, orderUID, o)
 	return nil
 }
