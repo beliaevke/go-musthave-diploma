@@ -144,7 +144,13 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 	case nil:
 		return u.UserID, nil
 	case err:
-		logger.Warnf("Query GetUser: " + err.Error())
+		var PassIsEmpty string
+		if u.UserPassword == "" {
+			PassIsEmpty = "PASS is empty"
+		} else {
+			PassIsEmpty = "PASS is not empty"
+		}
+		logger.Warnf("Query GetUser: " + err.Error() + "USER: " + u.UserLogin + PassIsEmpty)
 		return -1, nil
 	}
 	return u.UserID, nil
@@ -185,8 +191,8 @@ func (o *Order) AddOrder(ctx context.Context, dbpool *pgxpool.Pool, userID int, 
 		WHERE
 		orders.ordernumber=$1
 		`, orderNumber)
-	var orderStatus string
-	switch err := result.Scan(&orderStatus); err {
+	var val int
+	switch err := result.Scan(&val); err {
 	case pgx.ErrNoRows:
 		_, err = dbpool.Exec(ctx, `
 			INSERT INTO public.orders
