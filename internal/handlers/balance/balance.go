@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/repository"
 	"net/http"
 	"strconv"
 	"time"
+
+	"musthave-diploma/internal/logger"
+	"musthave-diploma/internal/repository/balancerepo"
 
 	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/avast/retry-go/v4"
@@ -17,13 +17,13 @@ import (
 )
 
 type database interface {
-	GetBalance(ctx context.Context, dbpool *pgxpool.Pool, userID int) (repository.Balance, error)
-	BalanceWithdraw(ctx context.Context, dbpool *pgxpool.Pool, userID int, userBalance repository.Balance, withdraw repository.Withdraw) error
-	GetWithdrawals(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]repository.Withdrawals, error)
+	GetBalance(ctx context.Context, dbpool *pgxpool.Pool, userID int) (balancerepo.Balance, error)
+	BalanceWithdraw(ctx context.Context, dbpool *pgxpool.Pool, userID int, userBalance balancerepo.Balance, withdraw balancerepo.Withdraw) error
+	GetWithdrawals(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]balancerepo.Withdrawals, error)
 }
 
 func initDB() database {
-	return repository.NewBalance()
+	return balancerepo.NewBalance()
 }
 
 func GetBalanceHandler(dbpool *pgxpool.Pool) http.Handler {
@@ -79,7 +79,7 @@ func PostBalanceWithdrawHandler(dbpool *pgxpool.Pool) http.Handler {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
-			var withdraw repository.Withdraw
+			var withdraw balancerepo.Withdraw
 			err = retry.Do(func() error {
 				// десериализуем JSON в Visitor
 				if err = json.Unmarshal(buf.Bytes(), &withdraw); err != nil {
@@ -105,19 +105,6 @@ func PostBalanceWithdrawHandler(dbpool *pgxpool.Pool) http.Handler {
 				http.Error(w, "incorrect order number", http.StatusUnprocessableEntity)
 				return
 			}
-
-			orderUID, err := repository.NewOrder().GetOrder(ctx, dbpool, withdraw.OrderNumber)
-
-			fmt.Println("=========================PostBalanceWithdraw " + " -- " + strconv.Itoa(userID) + " -- " + strconv.Itoa(orderUID))
-
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			} /*else if userID != orderUID {
-				http.Error(w, "incorrect order number", http.StatusUnprocessableEntity)
-				return
-			}
-			*/
 
 			userBalance, err := db.GetBalance(ctx, dbpool, userID)
 			if err != nil {

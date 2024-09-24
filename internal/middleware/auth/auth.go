@@ -1,7 +1,6 @@
-package authentication
+package auth
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -69,9 +68,6 @@ func WithAuthentication(h http.Handler) http.Handler {
 			ResponseWriter: w, // встраиваем оригинальный http.ResponseWriter
 			userID:         claims.UserID,
 		}
-
-		fmt.Println("=!!!=======================claims.UserID " + " -- " + strconv.Itoa(claims.UserID))
-		fmt.Println("=!!!=======================aw.UserID " + " -- " + strconv.Itoa(aw.userID))
 
 		aw.Header().Set("UID", strconv.Itoa(aw.userID))
 

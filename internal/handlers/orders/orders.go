@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/repository"
 	"net/http"
 	"strconv"
 	"time"
+
+	"musthave-diploma/internal/logger"
+	"musthave-diploma/internal/repository/ordersrepo"
 
 	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,11 +20,11 @@ import (
 type database interface {
 	AddOrder(ctx context.Context, dbpool *pgxpool.Pool, userID int, orderNumber string) error
 	GetOrder(ctx context.Context, dbpool *pgxpool.Pool, orderNumber string) (int, error)
-	GetOrders(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]repository.Order, error)
+	GetOrders(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]ordersrepo.Order, error)
 }
 
 func initDB() database {
-	return repository.NewOrder()
+	return ordersrepo.NewOrder()
 }
 
 func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
@@ -92,23 +93,51 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 				http.Error(w, "orders not found", http.StatusNoContent) // w.WriteHeader(http.StatusNoContent)
 				return
 			}
-			fmt.Println("=========================Get orders 1")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(orders)
-			fmt.Println(r.Body)
-			fmt.Println("=========================Get orders end ")
 		}
 	}
 	return http.HandlerFunc(fn)
 }
 
-func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr string, o repository.Order) error {
+func CheckOrders(FlagASAddr string, dbpool *pgxpool.Pool) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			AwaitOrders, err := ordersrepo.GetAwaitOrders(ctx, dbpool)
+			if err != nil {
+				logger.Warnf(err.Error())
+				continue
+			}
+			if len(AwaitOrders) == 0 {
+				continue
+			}
+			for _, order := range AwaitOrders {
+				err = sendOrdersHandler(ctx, dbpool, FlagASAddr, order)
+				if err != nil {
+					logger.Warnf(err.Error())
+				}
+			}
+			continue
+		}
+	}
+}
+
+func sendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr string, o ordersrepo.Order) error {
 
 	client := &http.Client{}
-
 	url := fmt.Sprintf("%s/api/orders/%v", FlagASAddr, o.OrderNumber)
-	fmt.Println("!!=======================SendOrders " + url)
+
 	var body []byte
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bytes.NewBuffer(body))
 	if err != nil {
@@ -123,15 +152,14 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 	if err != nil {
 		return err
 	}
-	fmt.Println("!!=======================SendOrders OrderNumber " + o.OrderNumber)
+
 	orderUID, err := initDB().GetOrder(ctx, dbpool, o.OrderNumber)
 	if err != nil {
 		return err
 	}
-	fmt.Println("!!=======================SendOrders start")
 	if response.StatusCode == http.StatusNoContent {
 		o.OrderStatus = "INVALID"
-		repository.UpdateOrder(ctx, dbpool, orderUID, o)
+		ordersrepo.UpdateOrder(ctx, dbpool, orderUID, o)
 		return nil
 	} else if response.StatusCode == http.StatusTooManyRequests {
 		logger.Warnf("number of requests to the service has been exceeded")
@@ -140,13 +168,14 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 		logger.Warnf("send order for calculation error")
 		return err
 	}
+
 	var respBody struct {
 		Order   string  `json:"order"`
 		Status  string  `json:"status"`
 		Accrual float32 `json:"accrual"`
 	}
-	fmt.Println("!!=======================SendOrders respBody" + string(body))
 	err = json.Unmarshal(body, &respBody)
+
 	if err != nil {
 		logger.Warnf("unmarshal response body error")
 		return err
@@ -159,7 +188,7 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 	} else {
 		o.OrderStatus = "PROCESSING"
 	}
-	fmt.Println("!!=======================SendOrders UpdateOrder")
-	repository.UpdateOrder(ctx, dbpool, orderUID, o)
+
+	ordersrepo.UpdateOrder(ctx, dbpool, orderUID, o)
 	return nil
 }

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/middleware/authentication"
-	"musthave-diploma/internal/repository"
+	"musthave-diploma/internal/middleware/auth"
+	"musthave-diploma/internal/repository/usersrepo"
 	"musthave-diploma/internal/service"
 
 	"github.com/avast/retry-go/v4"
@@ -33,7 +33,7 @@ func authenticateUser(w http.ResponseWriter, userID int) error {
 		return err
 	}
 	// создаём новый токен с алгоритмом подписи HS256 и утверждениями — Claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, authentication.Claims{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, auth.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			// когда создан токен
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExpiresAt)),
@@ -61,7 +61,7 @@ func authenticateUser(w http.ResponseWriter, userID int) error {
 }
 
 func initDB(id int, login string, pass string) database {
-	return repository.NewUser(id, login, pass)
+	return usersrepo.NewUser(id, login, pass)
 }
 
 func UserRegisterHandler(dbpool *pgxpool.Pool) http.Handler {
@@ -74,7 +74,7 @@ func UserRegisterHandler(dbpool *pgxpool.Pool) http.Handler {
 			return
 		}
 		if r.Method == http.MethodPost && n != 0 {
-			var user repository.User
+			var user usersrepo.User
 			err := retry.Do(func() error {
 				if err = json.Unmarshal(buf.Bytes(), &user); err != nil {
 					return err
@@ -130,7 +130,7 @@ func UserLoginHandler(dbpool *pgxpool.Pool) http.Handler {
 			return
 		}
 		if r.Method == http.MethodPost && n != 0 {
-			var user repository.User
+			var user usersrepo.User
 			err := retry.Do(func() error {
 				// десериализуем JSON в Visitor
 				if err = json.Unmarshal(buf.Bytes(), &user); err != nil {

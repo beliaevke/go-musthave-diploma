@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"musthave-diploma/internal/logger"
 	"time"
+
+	"musthave-diploma/internal/logger"
 
 	"github.com/pressly/goose/v3"
 )
