@@ -14,6 +14,7 @@ import (
 	"musthave-diploma/internal/handlers/users"
 	"musthave-diploma/internal/logger"
 	"musthave-diploma/internal/middleware/authentication"
+	"musthave-diploma/internal/repository"
 
 	"github.com/go-chi/chi"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,7 +35,7 @@ func main() {
 		if err := run(cfg, dbpool); err != nil {
 			log.Fatal(err)
 		}
-		checkOrders(cfg, dbpool)
+		go checkOrders(ctx, cfg, dbpool)
 	} else {
 		logger.Warnf("Database URI is empty")
 	}
@@ -56,9 +57,28 @@ func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
 	return http.ListenAndServe(cfg.FlagRunAddr, mux)
 }
 
-func checkOrders(cfg config.ServerFlags, dbpool *pgxpool.Pool) {
-	f := func() {
-		orders.SendOrdersHandler(dbpool, cfg.FlagASAddr)
+func checkOrders(ctx context.Context, cfg config.ServerFlags, dbpool *pgxpool.Pool) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			AwaitOrders, err := repository.GetAwaitOrders(ctx, dbpool)
+			if err != nil {
+				logger.Warnf(err.Error())
+				continue
+			}
+			if len(AwaitOrders) == 0 {
+				continue
+			}
+			for _, order := range AwaitOrders {
+				err = orders.SendOrdersHandler(ctx, dbpool, cfg.FlagASAddr, order)
+				if err != nil {
+					logger.Warnf(err.Error())
+				}
+			}
+		}
 	}
-	time.AfterFunc(5*time.Second, f)
 }

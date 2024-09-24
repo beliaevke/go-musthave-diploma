@@ -102,71 +102,59 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func SendOrdersHandler(dbpool *pgxpool.Pool, FlagASAddr string) http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
+func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr string, o repository.Order) error {
 
-		orders, err := repository.GetAwaitOrders(ctx, dbpool)
-		if err != nil {
-			logger.Warnf(err.Error())
-			return
-		}
+	client := &http.Client{}
 
-		client := &http.Client{}
-		for _, o := range orders {
-			url := fmt.Sprintf("%s/api/orders/%v", FlagASAddr, o.OrderNumber)
-			var body []byte
-			request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bytes.NewBuffer(body))
-			if err != nil {
-				return
-			}
-			response, err := client.Do(request)
-			if err != nil {
-				return
-			}
-			response.Body.Close()
-			_, err = io.Copy(os.Stdout, response.Body)
-			if err != nil {
-				return
-			}
-			orderUID, err := initDB().GetOrder(ctx, dbpool, o.OrderNumber)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if response.StatusCode == http.StatusNoContent {
-				o.OrderStatus = "INVALID"
-				repository.UpdateOrder(ctx, dbpool, orderUID, o)
-				return
-			} else if response.StatusCode == http.StatusTooManyRequests {
-				logger.Warnf("number of requests to the service has been exceeded")
-				return
-			} else if response.StatusCode != http.StatusOK {
-				logger.Warnf("send order for calculation error")
-				return
-			}
-			var respBody struct {
-				Order   string  `json:"order"`
-				Status  string  `json:"status"`
-				Accrual float32 `json:"accrual"`
-			}
-			err = json.Unmarshal(body, &respBody)
-			if err != nil {
-				logger.Warnf("unmarshal response body error")
-				return
-			}
-			if respBody.Status == "PROCESSED" {
-				o.OrderStatus = respBody.Status
-				o.Accrual = respBody.Accrual
-			} else if respBody.Status == "INVALID" {
-				o.OrderStatus = respBody.Status
-			} else {
-				o.OrderStatus = "PROCESSING"
-			}
-			repository.UpdateOrder(ctx, dbpool, orderUID, o)
-		}
+	url := fmt.Sprintf("%s/api/orders/%v", FlagASAddr, o.OrderNumber)
 
+	var body []byte
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
 	}
-	return http.HandlerFunc(fn)
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	response.Body.Close()
+	_, err = io.Copy(os.Stdout, response.Body)
+	if err != nil {
+		return err
+	}
+	orderUID, err := initDB().GetOrder(ctx, dbpool, o.OrderNumber)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode == http.StatusNoContent {
+		o.OrderStatus = "INVALID"
+		repository.UpdateOrder(ctx, dbpool, orderUID, o)
+		return nil
+	} else if response.StatusCode == http.StatusTooManyRequests {
+		logger.Warnf("number of requests to the service has been exceeded")
+		return err
+	} else if response.StatusCode != http.StatusOK {
+		logger.Warnf("send order for calculation error")
+		return err
+	}
+	var respBody struct {
+		Order   string  `json:"order"`
+		Status  string  `json:"status"`
+		Accrual float32 `json:"accrual"`
+	}
+	err = json.Unmarshal(body, &respBody)
+	if err != nil {
+		logger.Warnf("unmarshal response body error")
+		return err
+	}
+	if respBody.Status == "PROCESSED" {
+		o.OrderStatus = respBody.Status
+		o.Accrual = respBody.Accrual
+	} else if respBody.Status == "INVALID" {
+		o.OrderStatus = respBody.Status
+	} else {
+		o.OrderStatus = "PROCESSING"
+	}
+	repository.UpdateOrder(ctx, dbpool, orderUID, o)
+	return nil
 }
