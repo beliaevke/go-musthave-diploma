@@ -9,7 +9,6 @@ import (
 	"musthave-diploma/internal/logger"
 	"musthave-diploma/internal/repository"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -119,8 +118,8 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 	if err != nil {
 		return err
 	}
-	response.Body.Close()
-	_, err = io.Copy(os.Stdout, response.Body)
+	defer response.Body.Close()
+	body, err = io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}
