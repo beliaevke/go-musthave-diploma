@@ -85,7 +85,10 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 
 			orders, err := db.GetOrders(ctx, dbpool, userID)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				//http.Error(w, err.Error(), http.StatusInternalServerError)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNoContent)
+				json.NewEncoder(w).Encode(orders)
 				fmt.Println("=========================Get orders err 1")
 				return
 			}

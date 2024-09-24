@@ -59,6 +59,7 @@ func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
 }
 
 func checkOrders(ctx context.Context, cfg config.ServerFlags, dbpool *pgxpool.Pool) {
+	fmt.Println("=========================checkOrders")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
