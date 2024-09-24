@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"musthave-diploma/internal/logger"
 	"musthave-diploma/internal/repository"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/avast/retry-go/v4"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -97,14 +99,25 @@ func PostBalanceWithdrawHandler(dbpool *pgxpool.Pool) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
 
-			orderUID, err := repository.NewOrder().GetOrder(ctx, dbpool, withdraw.OrderNumber)
+			err = goluhn.Validate(withdraw.OrderNumber)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			} else if userID != orderUID {
+				logger.Warnf("goluhn validate error: " + err.Error())
 				http.Error(w, "incorrect order number", http.StatusUnprocessableEntity)
 				return
 			}
+
+			orderUID, err := repository.NewOrder().GetOrder(ctx, dbpool, withdraw.OrderNumber)
+
+			fmt.Println("=========================PostBalanceWithdraw " + " -- " + strconv.Itoa(userID) + " -- " + strconv.Itoa(orderUID))
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			} /*else if userID != orderUID {
+				http.Error(w, "incorrect order number", http.StatusUnprocessableEntity)
+				return
+			}
+			*/
 
 			userBalance, err := db.GetBalance(ctx, dbpool, userID)
 			if err != nil {
