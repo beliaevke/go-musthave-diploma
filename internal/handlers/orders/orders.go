@@ -72,6 +72,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 
 			err = db.AddOrder(ctx, dbpool, userID, responseString)
 			if err != nil {
+				fmt.Println("=========================AddOrder " + " -- " + strconv.Itoa(userID) + " -- " + strconv.Itoa(orderUID) + " -- " + responseString)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

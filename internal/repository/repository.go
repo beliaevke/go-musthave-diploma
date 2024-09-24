@@ -206,7 +206,7 @@ func (o *Order) AddOrder(ctx context.Context, dbpool *pgxpool.Pool, userID int, 
 			return err
 		}
 	case nil:
-		err = errors.New("order already exists")
+		err = errors.New("order already exists, uid: " + strconv.Itoa(val))
 		if err != nil {
 			logger.Warnf("INSERT INTO Orders: " + err.Error())
 			return err

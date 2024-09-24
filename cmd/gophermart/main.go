@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -59,16 +58,13 @@ func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
 }
 
 func checkOrders(ctx context.Context, cfg config.ServerFlags, dbpool *pgxpool.Pool) {
-	fmt.Println("=========================checkOrders")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("=========================CHECK ORDERS ctx.Done")
 			return
 		case <-ticker.C:
-			fmt.Println("=========================CHECK ORDERS AwaitOrders")
 			AwaitOrders, err := repository.GetAwaitOrders(ctx, dbpool)
 			if err != nil {
 				logger.Warnf(err.Error())
