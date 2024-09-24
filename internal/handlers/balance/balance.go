@@ -101,7 +101,7 @@ func PostBalanceWithdrawHandler(dbpool *pgxpool.Pool) http.Handler {
 
 			err = goluhn.Validate(withdraw.OrderNumber)
 			if err != nil {
-				logger.Warnf("goluhn validate error: " + err.Error())
+				logger.Infof("goluhn validate error: " + err.Error() + " - " + withdraw.OrderNumber)
 				http.Error(w, "incorrect order number", http.StatusUnprocessableEntity)
 				return
 			}

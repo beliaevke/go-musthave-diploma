@@ -50,7 +50,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 			responseString := buf.String()
 			err = goluhn.Validate(responseString)
 			if err != nil {
-				logger.Warnf("goluhn validate error: " + err.Error())
+				logger.Infof("goluhn validate error: " + err.Error() + " - " + responseString)
 				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 				return
 			}
