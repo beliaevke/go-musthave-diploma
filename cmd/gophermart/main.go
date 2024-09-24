@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -35,14 +36,16 @@ func main() {
 		if err := run(cfg, dbpool); err != nil {
 			log.Fatal(err)
 		}
-		go checkOrders(ctx, cfg, dbpool)
 	} else {
 		logger.Warnf("Database URI is empty")
 	}
 }
 
 func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
+
 	logger.ServerRunningInfo(cfg.FlagRunAddr)
+
+	go checkOrders(cfg, dbpool)
 
 	mux := chi.NewMux()
 	mux.Use(logger.WithLogging)
@@ -57,20 +60,29 @@ func run(cfg config.ServerFlags, dbpool *pgxpool.Pool) error {
 	return http.ListenAndServe(cfg.FlagRunAddr, mux)
 }
 
-func checkOrders(ctx context.Context, cfg config.ServerFlags, dbpool *pgxpool.Pool) {
-	ticker := time.NewTicker(10 * time.Second)
+func checkOrders(cfg config.ServerFlags, dbpool *pgxpool.Pool) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	fmt.Println("=======!!!=============== checkOrders start")
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
+			fmt.Println("=======!!!=============== checkOrders Done")
 			return
 		case <-ticker.C:
+			fmt.Println("=======!!!=============== checkOrders C")
 			AwaitOrders, err := repository.GetAwaitOrders(ctx, dbpool)
 			if err != nil {
 				logger.Warnf(err.Error())
+				fmt.Println("=======!!!=============== checkOrders continue 1")
 				continue
 			}
 			if len(AwaitOrders) == 0 {
+				fmt.Println("=======!!!=============== checkOrders continue 1")
 				continue
 			}
 			for _, order := range AwaitOrders {
@@ -79,6 +91,8 @@ func checkOrders(ctx context.Context, cfg config.ServerFlags, dbpool *pgxpool.Po
 					logger.Warnf(err.Error())
 				}
 			}
+			fmt.Println("=======!!!=============== checkOrders continue 2")
+			continue
 		}
 	}
 }
