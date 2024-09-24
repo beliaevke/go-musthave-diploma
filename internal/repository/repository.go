@@ -383,7 +383,7 @@ func (b *Balance) BalanceWithdraw(ctx context.Context, dbpool *pgxpool.Pool, use
 func (b *Balance) GetWithdrawals(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]Withdrawals, error) {
 	var val []Withdrawals
 	result, err := dbpool.Query(ctx, `
-		SELECT orderNumber, -pointsQuantity, processedAt
+		SELECT orderNumber, -pointsQuantity as pointsQuantity, processedAt
 		FROM
 			public.ordersoperations
 		WHERE
