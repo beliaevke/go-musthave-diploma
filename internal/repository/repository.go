@@ -69,13 +69,6 @@ type Withdrawals struct {
 }
 
 func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
-	if u.UserLogin == "" || u.UserPassword == "" {
-		err := errors.New("user or pass is empty")
-		if err != nil {
-			logger.Warnf("INSERT INTO Users: " + err.Error())
-			return err
-		}
-	}
 	tx, err := dbpool.Begin(ctx)
 	if err != nil {
 		return err
@@ -131,6 +124,13 @@ func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
 }
 
 func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
+	if u.UserLogin == "" || u.UserPassword == "" {
+		err := errors.New("user or pass is empty")
+		if err != nil {
+			logger.Warnf("GetUser: " + err.Error())
+			return err
+		}
+	}
 	result := dbpool.QueryRow(ctx, `
 		SELECT users.userID
 		FROM
