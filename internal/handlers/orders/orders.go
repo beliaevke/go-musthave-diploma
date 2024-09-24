@@ -145,7 +145,7 @@ func SendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 		Status  string  `json:"status"`
 		Accrual float32 `json:"accrual"`
 	}
-	fmt.Println("!!=======================SendOrders respBody")
+	fmt.Println("!!=======================SendOrders respBody" + string(body))
 	err = json.Unmarshal(body, &respBody)
 	if err != nil {
 		logger.Warnf("unmarshal response body error")

@@ -309,16 +309,20 @@ func UpdateOrder(ctx context.Context, dbpool *pgxpool.Pool, orderUID int, o Orde
 		logger.Warnf("INSERT INTO UpdateOrder: " + err.Error())
 		return err
 	}
-	userBalance, err := NewBalance().GetBalance(ctx, dbpool, orderUID)
+	_, err = dbpool.Exec(ctx, `
+		UPDATE public.orders
+		SET orderStatus=$1, accrual=$2, uploadedAt=$3
+		WHERE userID=$4 AND orderNumber=$5;
+	`, o.OrderStatus, o.Accrual, time.Now(), orderUID, o.OrderNumber)
 	if err != nil {
-		logger.Warnf("userBalance read: " + err.Error())
+		logger.Warnf("UPDATE orders: " + err.Error())
 		return err
 	}
 	_, err = dbpool.Exec(ctx, `
 		UPDATE public.usersbalance
 		SET pointssum=$1
 		WHERE userID=$2;
-	`, userBalance.PointsSum+o.Accrual, orderUID)
+	`, o.Accrual, orderUID)
 	if err != nil {
 		logger.Warnf("UPDATE usersbalance++: " + err.Error())
 		return err
