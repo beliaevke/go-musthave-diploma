@@ -24,7 +24,7 @@ type database interface {
 	LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error)
 }
 
-const tokenExpiresAt = time.Minute * 5 //time.Second * 15
+const tokenExpiresAt = time.Second * 15 //time.Minute * 5 //
 
 func authenticateUser(w http.ResponseWriter, userID int) error {
 	// создаём случайный ключ

@@ -158,6 +158,13 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 }
 
 func (u *User) LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
+	if u.UserLogin == "" || u.UserPassword == "" {
+		err := errors.New("user or pass is empty")
+		if err != nil {
+			logger.Warnf("GetUser: " + err.Error())
+			return -1, err
+		}
+	}
 	hash := md5.Sum([]byte(u.UserPassword))
 	hashedPass := hex.EncodeToString(hash[:])
 	result := dbpool.QueryRow(ctx, `
