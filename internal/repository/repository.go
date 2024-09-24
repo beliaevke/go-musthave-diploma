@@ -128,7 +128,7 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 		err := errors.New("user or pass is empty")
 		if err != nil {
 			logger.Warnf("GetUser: " + err.Error())
-			return err
+			return -1, err
 		}
 	}
 	result := dbpool.QueryRow(ctx, `
