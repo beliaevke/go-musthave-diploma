@@ -69,10 +69,10 @@ type Withdrawals struct {
 	ProcessedAt    time.Time `db:"processedat" json:"processed_at"`
 }
 
-func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
+func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 	tx, err := dbpool.Begin(ctx)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	defer tx.Rollback(ctx) //nolint
 	result := dbpool.QueryRow(ctx, `
@@ -94,12 +94,12 @@ func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
 		`, u.UserLogin, hashedPass)
 		if err != nil {
 			logger.Warnf("INSERT INTO Users: " + err.Error())
-			return err
+			return -1, err
 		}
 		userID, err := u.GetUser(ctx, dbpool)
 		if err != nil {
 			logger.Warnf("CreateUser ID : " + err.Error())
-			return err
+			return userID, err
 		}
 		_, err = dbpool.Exec(ctx, `
 			INSERT INTO public.usersbalance
@@ -109,19 +109,20 @@ func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error {
 		`, userID, 0, 0)
 		if err != nil {
 			logger.Warnf("INSERT INTO balance: " + err.Error())
-			return err
+			return userID, err
 		}
+		return userID, tx.Commit(ctx)
 	case nil:
 		err = errors.New("user already exists with this login")
 		if err != nil {
 			logger.Warnf("INSERT INTO Users: " + err.Error())
-			return err
+			return -1, err
 		}
 	case err:
 		logger.Warnf("Query CreateUser: " + err.Error())
-		return err
+		return -1, err
 	}
-	return tx.Commit(ctx)
+	return -1, tx.Commit(ctx)
 }
 
 func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {

@@ -102,7 +102,8 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(orders)
-			fmt.Println("=========================Get orders end")
+			fmt.Println(r.Body)
+			fmt.Println("=========================Get orders end ")
 		}
 	}
 	return http.HandlerFunc(fn)

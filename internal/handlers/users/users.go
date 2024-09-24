@@ -19,7 +19,7 @@ import (
 )
 
 type database interface {
-	CreateUser(ctx context.Context, dbpool *pgxpool.Pool) error
+	CreateUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error)
 	GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error)
 	LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error)
 }
@@ -104,7 +104,7 @@ func UserRegisterHandler(dbpool *pgxpool.Pool) http.Handler {
 				http.Error(w, "user already exists with this login", http.StatusConflict)
 				return
 			}
-			err = user.CreateUser(ctx, dbpool)
+			userID, err = user.CreateUser(ctx, dbpool)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
