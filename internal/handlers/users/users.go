@@ -74,7 +74,7 @@ func UserRegisterHandler(db *postgres.DB) http.Handler {
 			return
 		}
 
-		if r.Method != http.MethodPost || n != 0 {
+		if r.Method != http.MethodPost || n == 0 {
 			return
 		}
 
@@ -133,7 +133,7 @@ func UserLoginHandler(db *postgres.DB) http.Handler {
 			return
 		}
 
-		if r.Method != http.MethodPost || n != 0 {
+		if r.Method != http.MethodPost || n == 0 {
 			return
 		}
 

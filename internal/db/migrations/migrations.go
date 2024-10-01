@@ -19,7 +19,7 @@ var embedMigrations embed.FS
 func Run(cfg config.ServerFlags, ctx context.Context) error {
 
 	if cfg.FlagDatabaseURI == "" {
-		err := errors.New("Database URI is empty")
+		err := errors.New("database URI is empty")
 		logger.Warnf("InitDB fail: " + err.Error())
 		return err
 	}
