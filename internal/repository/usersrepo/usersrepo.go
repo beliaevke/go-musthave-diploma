@@ -7,10 +7,10 @@ import (
 	"errors"
 	"strconv"
 
+	"musthave-diploma/internal/db/postgres"
 	"musthave-diploma/internal/logger"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -28,44 +28,28 @@ func NewUser(id int, login string, pass string) *User {
 	}
 }
 
-func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
-	tx, err := dbpool.Begin(ctx)
+func (u *User) CreateUser(ctx context.Context, db *postgres.DB) (int, error) {
+	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return -1, err
 	}
 	defer tx.Rollback(ctx) //nolint
-	result := dbpool.QueryRow(ctx, `
-		SELECT users.userID
-		FROM
-			public.users
-		WHERE
-		users.userLogin=$1
-		`, u.UserLogin)
+	result := db.Pool.QueryRow(ctx, SelectUser(), u.UserLogin)
 	switch err := result.Scan(&u.UserLogin); err {
 	case pgx.ErrNoRows:
 		hash := md5.Sum([]byte(u.UserPassword))
 		hashedPass := hex.EncodeToString(hash[:])
-		_, err = dbpool.Exec(ctx, `
-			INSERT INTO public.users
-			(userLogin, userPassword)
-			VALUES
-			($1, $2);
-		`, u.UserLogin, hashedPass)
+		_, err = db.Pool.Exec(ctx, CreateUserInsert(), u.UserLogin, hashedPass)
 		if err != nil {
 			logger.Warnf("INSERT INTO Users: " + err.Error())
 			return -1, err
 		}
-		userID, err := u.GetUser(ctx, dbpool)
+		userID, err := u.GetUser(ctx, db)
 		if err != nil {
 			logger.Warnf("CreateUser ID : " + err.Error())
 			return userID, err
 		}
-		_, err = dbpool.Exec(ctx, `
-			INSERT INTO public.usersbalance
-			(userID, pointsSum, pointsLoss)
-			VALUES
-			($1, $2, $3);
-		`, userID, 0, 0)
+		_, err = db.Pool.Exec(ctx, CreateUserBalanceInsert(), userID, 0, 0)
 		if err != nil {
 			logger.Warnf("INSERT INTO balance: " + err.Error())
 			return userID, err
@@ -84,7 +68,7 @@ func (u *User) CreateUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error
 	return -1, tx.Commit(ctx)
 }
 
-func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
+func (u *User) GetUser(ctx context.Context, db *postgres.DB) (int, error) {
 	if u.UserLogin == "" || u.UserPassword == "" {
 		err := errors.New("user or pass is empty")
 		if err != nil {
@@ -92,13 +76,7 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 			return -1, err
 		}
 	}
-	result := dbpool.QueryRow(ctx, `
-		SELECT users.userID
-		FROM
-			public.users
-		WHERE
-		users.userLogin=$1
-	`, u.UserLogin)
+	result := db.Pool.QueryRow(ctx, SelectUser(), u.UserLogin)
 	switch err := result.Scan(&u.UserID); err {
 	case pgx.ErrNoRows:
 		return -1, nil
@@ -117,7 +95,7 @@ func (u *User) GetUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
 	return u.UserID, nil
 }
 
-func (u *User) LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error) {
+func (u *User) LoginUser(ctx context.Context, db *postgres.DB) (int, error) {
 	if u.UserLogin == "" || u.UserPassword == "" {
 		err := errors.New("user or pass is empty")
 		if err != nil {
@@ -127,13 +105,7 @@ func (u *User) LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error)
 	}
 	hash := md5.Sum([]byte(u.UserPassword))
 	hashedPass := hex.EncodeToString(hash[:])
-	result := dbpool.QueryRow(ctx, `
-		SELECT users.userID
-		FROM
-			public.users
-		WHERE
-		users.userLogin=$1 AND users.userPassword = $2
-	`, u.UserLogin, hashedPass)
+	result := db.Pool.QueryRow(ctx, SelectUserWithPass(), u.UserLogin, hashedPass)
 	switch err := result.Scan(&u.UserID); err {
 	case pgx.ErrNoRows:
 		return -1, nil
@@ -144,4 +116,45 @@ func (u *User) LoginUser(ctx context.Context, dbpool *pgxpool.Pool) (int, error)
 		return -1, nil
 	}
 	return u.UserID, nil
+}
+
+////////////////////////////////////////
+// queries
+
+func SelectUser() string {
+	return `
+		SELECT users.userID
+		FROM
+			public.users
+		WHERE
+		users.userLogin=$1
+	`
+}
+
+func SelectUserWithPass() string {
+	return `
+		SELECT users.userID
+		FROM
+			public.users
+		WHERE
+		users.userLogin=$1 AND users.userPassword = $2
+	`
+}
+
+func CreateUserInsert() string {
+	return `
+		INSERT INTO public.users
+		(userLogin, userPassword)
+		VALUES
+		($1, $2);
+	`
+}
+
+func CreateUserBalanceInsert() string {
+	return `
+		INSERT INTO public.usersbalance
+		(userID, pointsSum, pointsLoss)
+		VALUES
+		($1, $2, $3);
+	`
 }

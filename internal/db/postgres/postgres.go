@@ -7,10 +7,14 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func SetDB(ctx context.Context, databaseURI string) (*pgxpool.Pool, error) {
+type DB struct {
+	Pool *pgxpool.Pool
+}
+
+func NewDB(ctx context.Context, databaseURI string) (*DB, error) {
 	dbpool, err := pgxpool.New(ctx, databaseURI)
 	if err != nil {
-		return dbpool, err
+		return &DB{}, err
 	}
-	return dbpool, nil
+	return &DB{Pool: dbpool}, nil
 }

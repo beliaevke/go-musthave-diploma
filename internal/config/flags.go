@@ -16,9 +16,9 @@ type ServerFlags struct {
 	EnvASAddr       string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 }
 
-// parseFlags обрабатывает аргументы командной строки
+// NewConfig обрабатывает аргументы командной строки
 // и сохраняет их значения в соответствующих переменных
-func ParseFlags() ServerFlags {
+func NewConfig() ServerFlags {
 	// для случаев, когда в переменных окружения присутствует непустое значение,
 	// переопределим их, даже если они были переданы через аргументы командной строки
 	cfg := &ServerFlags{}

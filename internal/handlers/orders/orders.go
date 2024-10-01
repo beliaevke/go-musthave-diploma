@@ -10,27 +10,27 @@ import (
 	"strconv"
 	"time"
 
+	"musthave-diploma/internal/db/postgres"
 	"musthave-diploma/internal/logger"
 	"musthave-diploma/internal/repository/ordersrepo"
 
 	"github.com/ShiraazMoollatjie/goluhn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type database interface {
-	AddOrder(ctx context.Context, dbpool *pgxpool.Pool, userID int, orderNumber string) error
-	GetOrder(ctx context.Context, dbpool *pgxpool.Pool, orderNumber string) (int, error)
-	GetOrders(ctx context.Context, dbpool *pgxpool.Pool, userID int) ([]ordersrepo.Order, error)
+	AddOrder(ctx context.Context, db *postgres.DB, userID int, orderNumber string) error
+	GetOrder(ctx context.Context, db *postgres.DB, orderNumber string) (int, error)
+	GetOrders(ctx context.Context, db *postgres.DB, userID int) ([]ordersrepo.Order, error)
 }
 
-func initDB() database {
+func newRepo() database {
 	return ordersrepo.NewOrder()
 }
 
-func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
+func GetOrdersHandler(db *postgres.DB) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
-		db := initDB()
+		repo := newRepo()
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
 		if err != nil {
 			logger.Warnf("UID validate error: " + err.Error())
@@ -58,7 +58,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
 
-			orderUID, err := db.GetOrder(ctx, dbpool, responseString)
+			orderUID, err := repo.GetOrder(ctx, db, responseString)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -70,7 +70,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 				return
 			}
 
-			err = db.AddOrder(ctx, dbpool, userID, responseString)
+			err = repo.AddOrder(ctx, db, userID, responseString)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -81,7 +81,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 			defer cancel()
 
-			orders, err := db.GetOrders(ctx, dbpool, userID)
+			orders, err := repo.GetOrders(ctx, db, userID)
 			if err != nil {
 				//http.Error(w, err.Error(), http.StatusInternalServerError)
 				w.Header().Set("Content-Type", "application/json")
@@ -101,7 +101,7 @@ func GetOrdersHandler(dbpool *pgxpool.Pool) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func CheckOrders(FlagASAddr string, dbpool *pgxpool.Pool) {
+func CheckOrders(FlagASAddr string, db *postgres.DB) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -114,7 +114,7 @@ func CheckOrders(FlagASAddr string, dbpool *pgxpool.Pool) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			AwaitOrders, err := ordersrepo.GetAwaitOrders(ctx, dbpool)
+			AwaitOrders, err := ordersrepo.GetAwaitOrders(ctx, db)
 			if err != nil {
 				logger.Warnf(err.Error())
 				continue
@@ -123,7 +123,7 @@ func CheckOrders(FlagASAddr string, dbpool *pgxpool.Pool) {
 				continue
 			}
 			for _, order := range AwaitOrders {
-				err = sendOrdersHandler(ctx, dbpool, FlagASAddr, order)
+				err = sendOrdersHandler(ctx, db, FlagASAddr, order)
 				if err != nil {
 					logger.Warnf(err.Error())
 				}
@@ -133,7 +133,7 @@ func CheckOrders(FlagASAddr string, dbpool *pgxpool.Pool) {
 	}
 }
 
-func sendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr string, o ordersrepo.Order) error {
+func sendOrdersHandler(ctx context.Context, db *postgres.DB, FlagASAddr string, o ordersrepo.Order) error {
 
 	client := &http.Client{}
 	url := fmt.Sprintf("%s/api/orders/%v", FlagASAddr, o.OrderNumber)
@@ -153,13 +153,13 @@ func sendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 		return err
 	}
 
-	orderUID, err := initDB().GetOrder(ctx, dbpool, o.OrderNumber)
+	orderUID, err := newRepo().GetOrder(ctx, db, o.OrderNumber)
 	if err != nil {
 		return err
 	}
 	if response.StatusCode == http.StatusNoContent {
 		o.OrderStatus = "INVALID"
-		ordersrepo.UpdateOrder(ctx, dbpool, orderUID, o)
+		ordersrepo.UpdateOrder(ctx, db, orderUID, o)
 		return nil
 	} else if response.StatusCode == http.StatusTooManyRequests {
 		logger.Warnf("number of requests to the service has been exceeded")
@@ -189,6 +189,6 @@ func sendOrdersHandler(ctx context.Context, dbpool *pgxpool.Pool, FlagASAddr str
 		o.OrderStatus = "PROCESSING"
 	}
 
-	ordersrepo.UpdateOrder(ctx, dbpool, orderUID, o)
+	ordersrepo.UpdateOrder(ctx, db, orderUID, o)
 	return nil
 }
