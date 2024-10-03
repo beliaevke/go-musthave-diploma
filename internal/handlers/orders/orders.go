@@ -23,14 +23,13 @@ type database interface {
 	GetOrders(ctx context.Context, db *postgres.DB, userID int) ([]ordersrepo.Order, error)
 }
 
-func newRepo() database {
+func NewRepo() database {
 	return ordersrepo.NewOrder()
 }
 
-func GetOrdersHandler(db *postgres.DB) http.Handler {
+func GetOrdersHandler(db *postgres.DB, repo database) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
-		repo := newRepo()
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
 		if err != nil {
 			logger.Warnf("UID validate error: " + err.Error())
@@ -153,7 +152,7 @@ func sendOrdersHandler(ctx context.Context, db *postgres.DB, FlagASAddr string, 
 		return err
 	}
 
-	orderUID, err := newRepo().GetOrder(ctx, db, o.OrderNumber)
+	orderUID, err := NewRepo().GetOrder(ctx, db, o.OrderNumber)
 	if err != nil {
 		return err
 	}

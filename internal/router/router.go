@@ -22,10 +22,14 @@ func NewRouter(db *postgres.DB) *Router {
 
 	mux.Handle("/api/user/register", users.UserRegisterHandler(db))
 	mux.Handle("/api/user/login", users.UserLoginHandler(db))
-	mux.Handle("/api/user/orders", auth.WithAuthentication(orders.GetOrdersHandler(db)))
-	mux.Handle("/api/user/balance", auth.WithAuthentication(balance.GetBalanceHandler(db)))
-	mux.Handle("/api/user/balance/withdraw", auth.WithAuthentication(balance.PostBalanceWithdrawHandler(db)))
-	mux.Handle("/api/user/withdrawals", auth.WithAuthentication(balance.GetWithdrawalsHandler(db)))
+
+	ordersrepo := orders.NewRepo()
+	mux.Handle("/api/user/orders", auth.WithAuthentication(orders.GetOrdersHandler(db, ordersrepo)))
+
+	balancerepo := balance.NewRepo()
+	mux.Handle("/api/user/balance", auth.WithAuthentication(balance.GetBalanceHandler(db, balancerepo)))
+	mux.Handle("/api/user/balance/withdraw", auth.WithAuthentication(balance.PostBalanceWithdrawHandler(db, balancerepo)))
+	mux.HandleFunc("GET /api/user/withdrawals", auth.WithAuthenticationFn(balance.GetWithdrawalsHandler(db, balancerepo)))
 
 	return &Router{R: mux}
 }

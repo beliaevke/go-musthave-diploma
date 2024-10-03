@@ -25,7 +25,7 @@ func Run(cfg config.ServerFlags, ctx context.Context) error {
 
 	router := router.NewRouter(db)
 
-	if err := http.ListenAndServe(cfg.FlagRunAddr, router.R); err != nil {
+	if err := http.ListenAndServe(cfg.FlagRunAddr, router.R); err != nil && err != http.ErrServerClosed {
 		logger.Warnf("App start fail: " + err.Error())
 		return err
 	}

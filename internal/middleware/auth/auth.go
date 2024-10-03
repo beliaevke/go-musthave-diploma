@@ -75,3 +75,60 @@ func WithAuthentication(h http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(fn)
 }
+
+func WithAuthenticationFn(h func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		st, err := r.Cookie("session_token")
+		if err != nil {
+			if err == http.ErrNoCookie {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		sk, err := r.Cookie("session_key")
+		if err != nil {
+			if err == http.ErrNoCookie {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		sessionToken, err := url.QueryUnescape(st.Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		sessionKey, err := url.QueryUnescape(sk.Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(sessionToken, claims,
+			func(t *jwt.Token) (interface{}, error) {
+				return []byte(sessionKey), nil
+			})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if !token.Valid {
+			http.Error(w, "token is not valid", http.StatusUnauthorized)
+			return
+		}
+
+		aw := authenticationResponseWriter{
+			ResponseWriter: w, // встраиваем оригинальный http.ResponseWriter
+			userID:         claims.UserID,
+		}
+
+		aw.Header().Set("UID", strconv.Itoa(aw.userID))
+
+	}
+	return fn
+}
