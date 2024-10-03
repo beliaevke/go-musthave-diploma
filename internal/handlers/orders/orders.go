@@ -21,6 +21,7 @@ type database interface {
 	AddOrder(ctx context.Context, userID int, orderNumber string) error
 	GetOrder(ctx context.Context, orderNumber string) (int, error)
 	GetOrders(ctx context.Context, userID int) ([]ordersrepo.Order, error)
+	Timeout() time.Duration
 }
 
 func NewRepo(db *postgres.DB) database {
@@ -54,7 +55,7 @@ func GetOrdersHandler(repo database) http.Handler {
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 			defer cancel()
 
 			orderUID, err := repo.GetOrder(ctx, responseString)
@@ -77,7 +78,7 @@ func GetOrdersHandler(repo database) http.Handler {
 
 			w.WriteHeader(http.StatusAccepted)
 		} else if r.Method == http.MethodGet {
-			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 			defer cancel()
 
 			orders, err := repo.GetOrders(ctx, userID)
@@ -100,9 +101,9 @@ func GetOrdersHandler(repo database) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func CheckOrders(FlagASAddr string, db *postgres.DB) {
+func CheckOrders(FlagASAddr string, CheckOrdersTimeout time.Duration, db *postgres.DB) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), CheckOrdersTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)

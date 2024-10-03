@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"embed"
 	"errors"
-	"time"
 
 	"musthave-diploma/internal/config"
 	"musthave-diploma/internal/logger"
@@ -35,7 +34,7 @@ func Run(cfg config.ServerFlags, ctx context.Context) error {
 	}()
 
 	goose.SetBaseFS(embedMigrations)
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, cfg.DefaultTimeout)
 	defer cancel()
 	if err := goose.UpContext(ctx, db, "sql"); err != nil {
 		logger.Warnf("goose up: run failed  " + err.Error())

@@ -32,6 +32,10 @@ type Withdrawals struct {
 	ProcessedAt    time.Time `db:"processedat" json:"processed_at"`
 }
 
+func (b *Balance) Timeout() time.Duration {
+	return b.db.DefaultTimeout
+}
+
 func (b *Balance) GetBalance(ctx context.Context, userID int) (Balance, error) {
 	var val Balance
 	result := b.db.Pool.QueryRow(ctx, GetBalanceQueryRow(), userID)

@@ -94,7 +94,7 @@ func UserRegisterHandler(db *postgres.DB) http.Handler {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), db.DefaultTimeout)
 		defer cancel()
 
 		repo := newRepo(user.UserID, user.UserLogin, user.UserPassword)
@@ -154,7 +154,7 @@ func UserLoginHandler(db *postgres.DB) http.Handler {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), db.DefaultTimeout)
 		defer cancel()
 
 		repo := newRepo(user.UserID, user.UserLogin, user.UserPassword)

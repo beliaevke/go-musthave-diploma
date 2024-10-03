@@ -20,6 +20,7 @@ type database interface {
 	GetBalance(ctx context.Context, userID int) (balancerepo.Balance, error)
 	BalanceWithdraw(ctx context.Context, userID int, userBalance balancerepo.Balance, withdraw balancerepo.Withdraw) error
 	GetWithdrawals(ctx context.Context, userID int) ([]balancerepo.Withdrawals, error)
+	Timeout() time.Duration
 }
 
 func NewRepo(db *postgres.DB) database {
@@ -40,7 +41,7 @@ func GetBalanceHandler(repo database) http.Handler {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 		defer cancel()
 
 		balance, err := repo.GetBalance(ctx, userID)
@@ -97,7 +98,7 @@ func PostBalanceWithdrawHandler(repo database) http.Handler {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 		defer cancel()
 
 		err = goluhn.Validate(withdraw.OrderNumber)
@@ -137,7 +138,7 @@ func GetWithdrawalsHandler(repo database) http.Handler {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 		defer cancel()
 
 		withdrawals, err := repo.GetWithdrawals(ctx, userID)

@@ -25,6 +25,10 @@ func NewOrder(db *postgres.DB) *Order {
 	return &Order{db: db}
 }
 
+func (o *Order) Timeout() time.Duration {
+	return o.db.DefaultTimeout
+}
+
 func (o *Order) AddOrder(ctx context.Context, userID int, orderNumber string) error {
 	tx, err := o.db.Pool.Begin(ctx)
 	if err != nil {

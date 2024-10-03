@@ -13,7 +13,7 @@ import (
 
 func Run(cfg config.ServerFlags, ctx context.Context) error {
 
-	db, err := postgres.NewDB(ctx, cfg.FlagDatabaseURI)
+	db, err := postgres.NewDB(ctx, cfg)
 	if err != nil {
 		logger.Warnf("SetDB fail: " + err.Error())
 		return err
@@ -21,7 +21,7 @@ func Run(cfg config.ServerFlags, ctx context.Context) error {
 
 	logger.ServerRunningInfo(cfg.FlagRunAddr)
 
-	go orders.CheckOrders(cfg.FlagASAddr, db)
+	go orders.CheckOrders(cfg.FlagASAddr, cfg.CheckOrdersTimeout, db)
 
 	router := router.NewRouter(db)
 

@@ -3,17 +3,20 @@ package config
 import (
 	"flag"
 	"log"
+	"time"
 
 	"github.com/caarlos0/env"
 )
 
 type ServerFlags struct {
-	FlagRunAddr     string
-	FlagDatabaseURI string
-	FlagASAddr      string
-	EnvRunAddr      string `env:"RUN_ADDRESS"`
-	EnvDatabaseURI  string `env:"DATABASE_URI"`
-	EnvASAddr       string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+	FlagRunAddr        string
+	FlagDatabaseURI    string
+	FlagASAddr         string
+	EnvRunAddr         string `env:"RUN_ADDRESS"`
+	EnvDatabaseURI     string `env:"DATABASE_URI"`
+	EnvASAddr          string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+	DefaultTimeout     time.Duration
+	CheckOrdersTimeout time.Duration
 }
 
 // NewConfig обрабатывает аргументы командной строки
@@ -33,6 +36,9 @@ func NewConfig() ServerFlags {
 	flag.StringVar(&cfg.FlagDatabaseURI, "d", "postgres://postgres:pos111@localhost:5432/postgres?sslmode=disable", "Database URI")
 	// Строка с адресом подключения к системе расчёта начислений должна получаться из переменной окружения ACCRUAL_SYSTEM_ADDRESS или флага командной строки -r
 	flag.StringVar(&cfg.FlagASAddr, "r", "", "Accrual system address")
+	// Продолжительность таймаутов
+	flag.DurationVar(&cfg.DefaultTimeout, "dt", 10*time.Second, "Default timeout duration")
+	flag.DurationVar(&cfg.CheckOrdersTimeout, "cot", 30*time.Second, "Default timeout duration")
 	// парсим переданные серверу аргументы в зарегистрированные переменные
 	flag.Parse()
 
