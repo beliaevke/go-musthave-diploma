@@ -127,7 +127,7 @@ func PostBalanceWithdrawHandler(db *postgres.DB, repo database) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func GetWithdrawalsHandler(db *postgres.DB, repo database) func(w http.ResponseWriter, r *http.Request) {
+func GetWithdrawalsHandler(db *postgres.DB, repo database) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -157,5 +157,5 @@ func GetWithdrawalsHandler(db *postgres.DB, repo database) func(w http.ResponseW
 		}
 		w.WriteHeader(http.StatusOK)
 	}
-	return fn
+	return http.HandlerFunc(fn)
 }
