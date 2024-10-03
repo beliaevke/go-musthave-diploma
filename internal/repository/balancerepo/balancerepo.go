@@ -14,10 +14,11 @@ import (
 type Balance struct {
 	PointsSum  float32 `db:"pointssum" json:"current"`
 	PointsLoss float32 `db:"pointsloss" json:"withdrawn"`
+	db         *postgres.DB
 }
 
-func NewBalance() *Balance {
-	return &Balance{}
+func NewBalance(db *postgres.DB) *Balance {
+	return &Balance{db: db}
 }
 
 type Withdraw struct {
@@ -31,9 +32,9 @@ type Withdrawals struct {
 	ProcessedAt    time.Time `db:"processedat" json:"processed_at"`
 }
 
-func (b *Balance) GetBalance(ctx context.Context, db *postgres.DB, userID int) (Balance, error) {
+func (b *Balance) GetBalance(ctx context.Context, userID int) (Balance, error) {
 	var val Balance
-	result := db.Pool.QueryRow(ctx, GetBalanceQueryRow(), userID)
+	result := b.db.Pool.QueryRow(ctx, GetBalanceQueryRow(), userID)
 	switch err := result.Scan(&val.PointsSum, &val.PointsLoss); err {
 	case pgx.ErrNoRows:
 		return val, nil
@@ -46,19 +47,19 @@ func (b *Balance) GetBalance(ctx context.Context, db *postgres.DB, userID int) (
 	return val, nil
 }
 
-func (b *Balance) BalanceWithdraw(ctx context.Context, db *postgres.DB, userID int, userBalance Balance, withdraw Withdraw) error {
-	tx, err := db.Pool.Begin(ctx)
+func (b *Balance) BalanceWithdraw(ctx context.Context, userID int, userBalance Balance, withdraw Withdraw) error {
+	tx, err := b.db.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint
-	_, err = db.Pool.Exec(ctx, BalanceWithdrawInsert(), userID, withdraw.OrderNumber, -withdraw.Sum, time.Now())
+	_, err = b.db.Pool.Exec(ctx, BalanceWithdrawInsert(), userID, withdraw.OrderNumber, -withdraw.Sum, time.Now())
 	if err != nil {
 		logger.Warnf("INSERT INTO OrdersOperations: " + err.Error())
 		return err
 	}
 
-	_, err = db.Pool.Exec(ctx, BalanceWithdrawUpdate(), userBalance.PointsSum-withdraw.Sum, userBalance.PointsLoss+withdraw.Sum, userID)
+	_, err = b.db.Pool.Exec(ctx, BalanceWithdrawUpdate(), userBalance.PointsSum-withdraw.Sum, userBalance.PointsLoss+withdraw.Sum, userID)
 	if err != nil {
 		logger.Warnf("UPDATE usersbalance--: " + err.Error())
 		return err
@@ -66,9 +67,9 @@ func (b *Balance) BalanceWithdraw(ctx context.Context, db *postgres.DB, userID i
 	return tx.Commit(ctx)
 }
 
-func (b *Balance) GetWithdrawals(ctx context.Context, db *postgres.DB, userID int) ([]Withdrawals, error) {
+func (b *Balance) GetWithdrawals(ctx context.Context, userID int) ([]Withdrawals, error) {
 	var val []Withdrawals
-	result, err := db.Pool.Query(ctx, GetWithdrawalsQuery(), userID)
+	result, err := b.db.Pool.Query(ctx, GetWithdrawalsQuery(), userID)
 	if err != nil {
 		logger.Warnf("Query GetWithdrawals: " + err.Error())
 		return val, err

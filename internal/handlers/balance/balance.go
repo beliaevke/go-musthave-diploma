@@ -17,16 +17,16 @@ import (
 )
 
 type database interface {
-	GetBalance(ctx context.Context, db *postgres.DB, userID int) (balancerepo.Balance, error)
-	BalanceWithdraw(ctx context.Context, db *postgres.DB, userID int, userBalance balancerepo.Balance, withdraw balancerepo.Withdraw) error
-	GetWithdrawals(ctx context.Context, db *postgres.DB, userID int) ([]balancerepo.Withdrawals, error)
+	GetBalance(ctx context.Context, userID int) (balancerepo.Balance, error)
+	BalanceWithdraw(ctx context.Context, userID int, userBalance balancerepo.Balance, withdraw balancerepo.Withdraw) error
+	GetWithdrawals(ctx context.Context, userID int) ([]balancerepo.Withdrawals, error)
 }
 
-func NewRepo() database {
-	return balancerepo.NewBalance()
+func NewRepo(db *postgres.DB) database {
+	return balancerepo.NewBalance(db)
 }
 
-func GetBalanceHandler(db *postgres.DB, repo database) http.Handler {
+func GetBalanceHandler(repo database) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -43,7 +43,7 @@ func GetBalanceHandler(db *postgres.DB, repo database) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 
-		balance, err := repo.GetBalance(ctx, db, userID)
+		balance, err := repo.GetBalance(ctx, userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -59,7 +59,7 @@ func GetBalanceHandler(db *postgres.DB, repo database) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func PostBalanceWithdrawHandler(db *postgres.DB, repo database) http.Handler {
+func PostBalanceWithdrawHandler(repo database) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -107,7 +107,7 @@ func PostBalanceWithdrawHandler(db *postgres.DB, repo database) http.Handler {
 			return
 		}
 
-		userBalance, err := repo.GetBalance(ctx, db, userID)
+		userBalance, err := repo.GetBalance(ctx, userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -117,7 +117,7 @@ func PostBalanceWithdrawHandler(db *postgres.DB, repo database) http.Handler {
 			return
 		}
 
-		err = repo.BalanceWithdraw(ctx, db, userID, userBalance, withdraw)
+		err = repo.BalanceWithdraw(ctx, userID, userBalance, withdraw)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -127,7 +127,7 @@ func PostBalanceWithdrawHandler(db *postgres.DB, repo database) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func GetWithdrawalsHandler(db *postgres.DB, repo database) http.Handler {
+func GetWithdrawalsHandler(repo database) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -140,7 +140,7 @@ func GetWithdrawalsHandler(db *postgres.DB, repo database) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 
-		withdrawals, err := repo.GetWithdrawals(ctx, db, userID)
+		withdrawals, err := repo.GetWithdrawals(ctx, userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -158,37 +158,4 @@ func GetWithdrawalsHandler(db *postgres.DB, repo database) http.Handler {
 		w.WriteHeader(http.StatusOK)
 	}
 	return http.HandlerFunc(fn)
-}
-
-func GetWithdrawalsHandlerFn(db *postgres.DB, repo database) func(w http.ResponseWriter, r *http.Request) {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		userID, err := strconv.Atoi(w.Header().Get("UID"))
-		if err != nil {
-			logger.Warnf("UID validate error: " + err.Error())
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-
-		withdrawals, err := repo.GetWithdrawals(ctx, db, userID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if len(withdrawals) == 0 {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		encoder := json.NewEncoder(w)
-		err = encoder.Encode(&withdrawals)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-	return fn
 }

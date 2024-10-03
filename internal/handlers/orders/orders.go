@@ -18,16 +18,16 @@ import (
 )
 
 type database interface {
-	AddOrder(ctx context.Context, db *postgres.DB, userID int, orderNumber string) error
-	GetOrder(ctx context.Context, db *postgres.DB, orderNumber string) (int, error)
-	GetOrders(ctx context.Context, db *postgres.DB, userID int) ([]ordersrepo.Order, error)
+	AddOrder(ctx context.Context, userID int, orderNumber string) error
+	GetOrder(ctx context.Context, orderNumber string) (int, error)
+	GetOrders(ctx context.Context, userID int) ([]ordersrepo.Order, error)
 }
 
-func NewRepo() database {
-	return ordersrepo.NewOrder()
+func NewRepo(db *postgres.DB) database {
+	return ordersrepo.NewOrder(db)
 }
 
-func GetOrdersHandler(db *postgres.DB, repo database) http.Handler {
+func GetOrdersHandler(repo database) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -57,7 +57,7 @@ func GetOrdersHandler(db *postgres.DB, repo database) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
 
-			orderUID, err := repo.GetOrder(ctx, db, responseString)
+			orderUID, err := repo.GetOrder(ctx, responseString)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -69,7 +69,7 @@ func GetOrdersHandler(db *postgres.DB, repo database) http.Handler {
 				return
 			}
 
-			err = repo.AddOrder(ctx, db, userID, responseString)
+			err = repo.AddOrder(ctx, userID, responseString)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -80,7 +80,7 @@ func GetOrdersHandler(db *postgres.DB, repo database) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 			defer cancel()
 
-			orders, err := repo.GetOrders(ctx, db, userID)
+			orders, err := repo.GetOrders(ctx, userID)
 			if err != nil {
 				//http.Error(w, err.Error(), http.StatusInternalServerError)
 				w.Header().Set("Content-Type", "application/json")
@@ -152,7 +152,7 @@ func sendOrdersHandler(ctx context.Context, db *postgres.DB, FlagASAddr string, 
 		return err
 	}
 
-	orderUID, err := NewRepo().GetOrder(ctx, db, o.OrderNumber)
+	orderUID, err := NewRepo(db).GetOrder(ctx, o.OrderNumber)
 	if err != nil {
 		return err
 	}

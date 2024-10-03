@@ -18,23 +18,24 @@ type Order struct {
 	OrderStatus string    `db:"orderstatus" json:"status"`
 	Accrual     float32   `db:"accrual" json:"accrual,omitempty"`
 	UploadedAt  time.Time `db:"uploadedat" json:"uploaded_at"`
+	db          *postgres.DB
 }
 
-func NewOrder() *Order {
-	return &Order{}
+func NewOrder(db *postgres.DB) *Order {
+	return &Order{db: db}
 }
 
-func (o *Order) AddOrder(ctx context.Context, db *postgres.DB, userID int, orderNumber string) error {
-	tx, err := db.Pool.Begin(ctx)
+func (o *Order) AddOrder(ctx context.Context, userID int, orderNumber string) error {
+	tx, err := o.db.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint
-	result := db.Pool.QueryRow(ctx, GetOrderQueryRow(), orderNumber)
+	result := o.db.Pool.QueryRow(ctx, GetOrderQueryRow(), orderNumber)
 	var val int
 	switch err := result.Scan(&val); err {
 	case pgx.ErrNoRows:
-		_, err = db.Pool.Exec(ctx, AddOrderInsert(), userID, orderNumber, "NEW", time.Now())
+		_, err = o.db.Pool.Exec(ctx, AddOrderInsert(), userID, orderNumber, "NEW", time.Now())
 		if err != nil {
 			logger.Warnf("INSERT INTO Orders: " + err.Error())
 			return err
@@ -52,9 +53,9 @@ func (o *Order) AddOrder(ctx context.Context, db *postgres.DB, userID int, order
 	return tx.Commit(ctx)
 }
 
-func (o *Order) GetOrder(ctx context.Context, db *postgres.DB, orderNumber string) (int, error) {
+func (o *Order) GetOrder(ctx context.Context, orderNumber string) (int, error) {
 	var val int
-	result := db.Pool.QueryRow(ctx, GetOrderQueryRow(), orderNumber)
+	result := o.db.Pool.QueryRow(ctx, GetOrderQueryRow(), orderNumber)
 	switch err := result.Scan(&val); err {
 	case pgx.ErrNoRows:
 		return -1, nil
@@ -67,9 +68,9 @@ func (o *Order) GetOrder(ctx context.Context, db *postgres.DB, orderNumber strin
 	return val, nil
 }
 
-func (o *Order) GetOrders(ctx context.Context, db *postgres.DB, userID int) ([]Order, error) {
+func (o *Order) GetOrders(ctx context.Context, userID int) ([]Order, error) {
 	var val []Order
-	result, err := db.Pool.Query(ctx, GetOrdersQueryRow(), userID)
+	result, err := o.db.Pool.Query(ctx, GetOrdersQueryRow(), userID)
 	if err != nil {
 		logger.Warnf("Query GetOrders: " + err.Error())
 		return val, err
