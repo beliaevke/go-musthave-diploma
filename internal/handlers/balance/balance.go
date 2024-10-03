@@ -159,3 +159,36 @@ func GetWithdrawalsHandler(db *postgres.DB, repo database) http.Handler {
 	}
 	return http.HandlerFunc(fn)
 }
+
+func GetWithdrawalsHandlerFn(db *postgres.DB, repo database) func(w http.ResponseWriter, r *http.Request) {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		userID, err := strconv.Atoi(w.Header().Get("UID"))
+		if err != nil {
+			logger.Warnf("UID validate error: " + err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+
+		withdrawals, err := repo.GetWithdrawals(ctx, db, userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(withdrawals) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		encoder := json.NewEncoder(w)
+		err = encoder.Encode(&withdrawals)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+	return fn
+}

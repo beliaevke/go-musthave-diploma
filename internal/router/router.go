@@ -17,7 +17,7 @@ type Router struct {
 
 func NewRouter(db *postgres.DB) *Router {
 
-	mux := chi.NewMux()
+	mux := chi.NewRouter()
 	mux.Use(logger.WithLogging)
 
 	mux.Handle("/api/user/register", users.UserRegisterHandler(db))
@@ -29,7 +29,7 @@ func NewRouter(db *postgres.DB) *Router {
 	balancerepo := balance.NewRepo()
 	mux.Handle("/api/user/balance", auth.WithAuthentication(balance.GetBalanceHandler(db, balancerepo)))
 	mux.Handle("/api/user/balance/withdraw", auth.WithAuthentication(balance.PostBalanceWithdrawHandler(db, balancerepo)))
-	mux.Handle("GET /api/user/withdrawals", auth.WithAuthentication(balance.GetWithdrawalsHandler(db, balancerepo)))
+	mux.HandleFunc("/api/user/withdrawals", auth.WithAuthenticationFn(balance.GetWithdrawalsHandlerFn(db, balancerepo)))
 
 	return &Router{R: mux}
 }
