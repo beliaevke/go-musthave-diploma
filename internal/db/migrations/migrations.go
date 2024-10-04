@@ -6,8 +6,8 @@ import (
 	"embed"
 	"errors"
 
-	"musthave-diploma/internal/config"
-	"musthave-diploma/internal/logger"
+	"github.com/beliaevke/go-musthave-diploma/internal/config"
+	"github.com/beliaevke/go-musthave-diploma/internal/logger"
 
 	"github.com/pressly/goose/v3"
 )

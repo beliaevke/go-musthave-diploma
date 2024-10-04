@@ -8,20 +8,21 @@ import (
 	"net/url"
 	"time"
 
-	"musthave-diploma/internal/db/postgres"
-	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/middleware/auth"
-	"musthave-diploma/internal/repository/usersrepo"
-	"musthave-diploma/internal/service"
+	"github.com/beliaevke/go-musthave-diploma/internal/db/postgres"
+	"github.com/beliaevke/go-musthave-diploma/internal/logger"
+	"github.com/beliaevke/go-musthave-diploma/internal/middleware/auth"
+	"github.com/beliaevke/go-musthave-diploma/internal/repository/usersrepo"
+	"github.com/beliaevke/go-musthave-diploma/internal/service"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/golang-jwt/jwt/v4"
 )
 
 type database interface {
-	CreateUser(ctx context.Context, db *postgres.DB) (int, error)
-	GetUser(ctx context.Context, db *postgres.DB) (int, error)
-	LoginUser(ctx context.Context, db *postgres.DB) (int, error)
+	CreateUser(ctx context.Context, u usersrepo.UserInfo) (int, error)
+	GetUser(ctx context.Context, u usersrepo.UserInfo) (int, error)
+	LoginUser(ctx context.Context, u usersrepo.UserInfo) (int, error)
+	Timeout() time.Duration
 }
 
 const tokenExpiresAt = time.Second * 30 //time.Minute * 5 //
@@ -60,11 +61,11 @@ func authenticateUser(w http.ResponseWriter, userID int) error {
 	return nil
 }
 
-func newRepo(id int, login string, pass string) database {
-	return usersrepo.NewUser(id, login, pass)
+func NewRepo(db *postgres.DB) database {
+	return usersrepo.NewUser(db)
 }
 
-func UserRegisterHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Request) {
+func UserRegisterHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var buf bytes.Buffer
@@ -78,7 +79,7 @@ func UserRegisterHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		var user usersrepo.User
+		var user usersrepo.UserInfo
 		err = retry.Do(func() error {
 			if err = json.Unmarshal(buf.Bytes(), &user); err != nil {
 				return err
@@ -94,12 +95,10 @@ func UserRegisterHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), db.DefaultTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 		defer cancel()
 
-		repo := newRepo(user.UserID, user.UserLogin, user.UserPassword)
-
-		userID, err := repo.GetUser(ctx, db)
+		userID, err := repo.GetUser(ctx, user)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -108,7 +107,7 @@ func UserRegisterHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Re
 			http.Error(w, "user already exists with this login", http.StatusConflict)
 			return
 		}
-		userID, err = user.CreateUser(ctx, db)
+		userID, err = repo.CreateUser(ctx, user)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -123,7 +122,7 @@ func UserRegisterHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Re
 	return fn
 }
 
-func UserLoginHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Request) {
+func UserLoginHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var buf bytes.Buffer
@@ -137,7 +136,7 @@ func UserLoginHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		var user usersrepo.User
+		var user usersrepo.UserInfo
 		err = retry.Do(func() error {
 			// десериализуем JSON в Visitor
 			if err = json.Unmarshal(buf.Bytes(), &user); err != nil {
@@ -154,12 +153,10 @@ func UserLoginHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), db.DefaultTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
 		defer cancel()
 
-		repo := newRepo(user.UserID, user.UserLogin, user.UserPassword)
-
-		userID, err := repo.LoginUser(ctx, db)
+		userID, err := repo.LoginUser(ctx, user)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

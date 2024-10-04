@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"musthave-diploma/internal/db/postgres"
-	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/repository/ordersrepo"
+	"github.com/beliaevke/go-musthave-diploma/internal/db/postgres"
+	"github.com/beliaevke/go-musthave-diploma/internal/logger"
+	"github.com/beliaevke/go-musthave-diploma/internal/repository/ordersrepo"
 
 	"github.com/ShiraazMoollatjie/goluhn"
 )

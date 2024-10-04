@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"musthave-diploma/internal/db/postgres"
-	"musthave-diploma/internal/logger"
+	"github.com/beliaevke/go-musthave-diploma/internal/db/postgres"
+	"github.com/beliaevke/go-musthave-diploma/internal/logger"
+	"github.com/beliaevke/go-musthave-diploma/internal/repository/queries"
 
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -38,7 +39,7 @@ func (b *Balance) Timeout() time.Duration {
 
 func (b *Balance) GetBalance(ctx context.Context, userID int) (Balance, error) {
 	var val Balance
-	result := b.db.Pool.QueryRow(ctx, GetBalanceQueryRow(), userID)
+	result := b.db.Pool.QueryRow(ctx, queries.GetBalanceQueryRow, userID)
 	switch err := result.Scan(&val.PointsSum, &val.PointsLoss); err {
 	case pgx.ErrNoRows:
 		return val, nil
@@ -57,13 +58,13 @@ func (b *Balance) BalanceWithdraw(ctx context.Context, userID int, userBalance B
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint
-	_, err = b.db.Pool.Exec(ctx, BalanceWithdrawInsert(), userID, withdraw.OrderNumber, -withdraw.Sum, time.Now())
+	_, err = b.db.Pool.Exec(ctx, queries.BalanceWithdrawInsert, userID, withdraw.OrderNumber, -withdraw.Sum, time.Now())
 	if err != nil {
 		logger.Warnf("INSERT INTO OrdersOperations: " + err.Error())
 		return err
 	}
 
-	_, err = b.db.Pool.Exec(ctx, BalanceWithdrawUpdate(), userBalance.PointsSum-withdraw.Sum, userBalance.PointsLoss+withdraw.Sum, userID)
+	_, err = b.db.Pool.Exec(ctx, queries.BalanceWithdrawUpdate, userBalance.PointsSum-withdraw.Sum, userBalance.PointsLoss+withdraw.Sum, userID)
 	if err != nil {
 		logger.Warnf("UPDATE usersbalance--: " + err.Error())
 		return err
@@ -73,7 +74,7 @@ func (b *Balance) BalanceWithdraw(ctx context.Context, userID int, userBalance B
 
 func (b *Balance) GetWithdrawals(ctx context.Context, userID int) ([]Withdrawals, error) {
 	var val []Withdrawals
-	result, err := b.db.Pool.Query(ctx, GetWithdrawalsQuery(), userID)
+	result, err := b.db.Pool.Query(ctx, queries.GetWithdrawalsQuery, userID)
 	if err != nil {
 		logger.Warnf("Query GetWithdrawals: " + err.Error())
 		return val, err
@@ -84,46 +85,4 @@ func (b *Balance) GetWithdrawals(ctx context.Context, userID int) ([]Withdrawals
 		return val, err
 	}
 	return val, nil
-}
-
-////////////////////////////////////////
-// queries
-
-func GetBalanceQueryRow() string {
-	return `
-		SELECT pointsSum, pointsLoss
-		FROM
-			public.usersbalance
-		WHERE
-			usersbalance.userID=$1
-	`
-}
-
-func BalanceWithdrawInsert() string {
-	return `
-		INSERT INTO public.ordersoperations
-		(userID, orderNumber, pointsQuantity, processedAt)
-		VALUES
-		($1, $2, $3, $4)
-	`
-}
-
-func BalanceWithdrawUpdate() string {
-	return `
-		UPDATE public.usersbalance
-		SET pointssum=$1, pointsloss=$2
-		WHERE userID=$3;
-	`
-}
-
-func GetWithdrawalsQuery() string {
-	return `
-		SELECT orderNumber, -pointsQuantity as pointsQuantity, processedAt
-		FROM
-			public.ordersoperations
-		WHERE
-			ordersoperations.userID=$1 AND ordersoperations.pointsQuantity < 0
-		ORDER BY
-			ordersoperations.processedAt DESC
-	`
 }

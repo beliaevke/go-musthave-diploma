@@ -4,9 +4,9 @@ import (
 	"context"
 	"log"
 
-	"musthave-diploma/internal/app"
-	"musthave-diploma/internal/config"
-	"musthave-diploma/internal/db/migrations"
+	"github.com/beliaevke/go-musthave-diploma/internal/app"
+	"github.com/beliaevke/go-musthave-diploma/internal/config"
+	"github.com/beliaevke/go-musthave-diploma/internal/db/migrations"
 )
 
 func main() {

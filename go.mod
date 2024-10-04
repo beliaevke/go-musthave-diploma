@@ -1,4 +1,4 @@
-module musthave-diploma
+module github.com/beliaevke/go-musthave-diploma
 
 go 1.22.7
 

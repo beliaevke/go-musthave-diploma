@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	"musthave-diploma/internal/config"
-	"musthave-diploma/internal/db/postgres"
-	"musthave-diploma/internal/handlers/orders"
-	"musthave-diploma/internal/logger"
-	"musthave-diploma/internal/router"
+	"github.com/beliaevke/go-musthave-diploma/internal/config"
+	"github.com/beliaevke/go-musthave-diploma/internal/db/postgres"
+	"github.com/beliaevke/go-musthave-diploma/internal/handlers/orders"
+	"github.com/beliaevke/go-musthave-diploma/internal/logger"
+	"github.com/beliaevke/go-musthave-diploma/internal/router"
 )
 
 func Run(cfg config.ServerFlags, ctx context.Context) error {

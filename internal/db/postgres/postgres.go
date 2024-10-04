@@ -2,8 +2,9 @@ package postgres
 
 import (
 	"context"
-	"musthave-diploma/internal/config"
 	"time"
+
+	"github.com/beliaevke/go-musthave-diploma/internal/config"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
