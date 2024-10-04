@@ -17,19 +17,30 @@ type Router struct {
 
 func NewRouter(db *postgres.DB) *Router {
 
-	mux := chi.NewMux()
-	mux.Use(logger.WithLogging)
+	r := chi.NewRouter()
 
-	mux.Handle("/api/user/register", users.UserRegisterHandler(db))
-	mux.Handle("/api/user/login", users.UserLoginHandler(db))
+	// Require Logging
+	r.Use(logger.WithLogging)
+
+	// User Routes
+	r.Group(func(r chi.Router) {
+		r.Post("/api/user/register", users.UserRegisterHandler(db))
+		r.Post("/api/user/login", users.UserLoginHandler(db))
+	})
 
 	ordersrepo := orders.NewRepo(db)
-	mux.Handle("/api/user/orders", auth.WithAuthentication(orders.GetOrdersHandler(ordersrepo)))
-
 	balancerepo := balance.NewRepo(db)
-	mux.Handle("/api/user/balance", auth.WithAuthentication(balance.GetBalanceHandler(balancerepo)))
-	mux.Handle("/api/user/balance/withdraw", auth.WithAuthentication(balance.PostBalanceWithdrawHandler(balancerepo)))
-	mux.Handle("/api/user/withdrawals", auth.WithAuthentication(balance.GetWithdrawalsHandler(balancerepo)))
 
-	return &Router{R: mux}
+	// Orders & Balance Routes
+	// Require Authentication
+	r.Group(func(r chi.Router) {
+		r.Use(auth.WithAuthentication)
+		r.Get("/api/user/orders", orders.GetOrdersHandler(ordersrepo))
+		r.Post("/api/user/orders", orders.PostOrdersHandler(ordersrepo))
+		r.Get("/api/user/balance", balance.GetBalanceHandler(balancerepo))
+		r.Post("/api/user/balance/withdraw", balance.PostBalanceWithdrawHandler(balancerepo))
+		r.Get("/api/user/withdrawals", balance.GetWithdrawalsHandler(balancerepo))
+	})
+
+	return &Router{R: r}
 }

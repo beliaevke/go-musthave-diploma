@@ -27,17 +27,13 @@ func NewRepo(db *postgres.DB) database {
 	return balancerepo.NewBalance(db)
 }
 
-func GetBalanceHandler(repo database) http.Handler {
+func GetBalanceHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
 		if err != nil {
 			logger.Warnf("UID validate error: " + err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if r.Method != http.MethodGet {
 			return
 		}
 
@@ -57,20 +53,16 @@ func GetBalanceHandler(repo database) http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	}
-	return http.HandlerFunc(fn)
+	return fn
 }
 
-func PostBalanceWithdrawHandler(repo database) http.Handler {
+func PostBalanceWithdrawHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
 		if err != nil {
 			logger.Warnf("UID validate error: " + err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if r.Method != http.MethodPost {
 			return
 		}
 
@@ -125,10 +117,10 @@ func PostBalanceWithdrawHandler(repo database) http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	}
-	return http.HandlerFunc(fn)
+	return fn
 }
 
-func GetWithdrawalsHandler(repo database) http.Handler {
+func GetWithdrawalsHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -158,5 +150,5 @@ func GetWithdrawalsHandler(repo database) http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	}
-	return http.HandlerFunc(fn)
+	return fn
 }

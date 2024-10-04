@@ -28,7 +28,38 @@ func NewRepo(db *postgres.DB) database {
 	return ordersrepo.NewOrder(db)
 }
 
-func GetOrdersHandler(repo database) http.Handler {
+func GetOrdersHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+
+		userID, err := strconv.Atoi(w.Header().Get("UID"))
+		if err != nil {
+			logger.Warnf("UID validate error: " + err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
+		defer cancel()
+
+		orders, err := repo.GetOrders(ctx, userID)
+		if err != nil {
+			//http.Error(w, err.Error(), http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNoContent)
+			json.NewEncoder(w).Encode(orders)
+			return
+		}
+		if len(orders) == 0 {
+			http.Error(w, "orders not found", http.StatusNoContent) // w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(orders)
+	}
+	return fn
+}
+
+func PostOrdersHandler(repo database) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
 		userID, err := strconv.Atoi(w.Header().Get("UID"))
@@ -38,67 +69,46 @@ func GetOrdersHandler(repo database) http.Handler {
 			return
 		}
 
-		if r.Method == http.MethodPost {
-			w.Header().Set("Content-Type", "text/plain")
-			var buf bytes.Buffer
-			// читаем тело запроса
-			n, err := buf.ReadFrom(r.Body)
-			if err != nil || n == 0 {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-			responseString := buf.String()
-			err = goluhn.Validate(responseString)
-			if err != nil {
-				logger.Infof("goluhn validate error: " + err.Error() + " - " + responseString)
-				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-				return
-			}
-
-			ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
-			defer cancel()
-
-			orderUID, err := repo.GetOrder(ctx, responseString)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			} else if userID == orderUID && orderUID != -1 {
-				w.WriteHeader(http.StatusOK)
-				return
-			} else if userID != orderUID && orderUID != -1 {
-				http.Error(w, "order already exists with another user", http.StatusConflict)
-				return
-			}
-
-			err = repo.AddOrder(ctx, userID, responseString)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			w.WriteHeader(http.StatusAccepted)
-		} else if r.Method == http.MethodGet {
-			ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
-			defer cancel()
-
-			orders, err := repo.GetOrders(ctx, userID)
-			if err != nil {
-				//http.Error(w, err.Error(), http.StatusInternalServerError)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusNoContent)
-				json.NewEncoder(w).Encode(orders)
-				return
-			}
-			if len(orders) == 0 {
-				http.Error(w, "orders not found", http.StatusNoContent) // w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(orders)
+		w.Header().Set("Content-Type", "text/plain")
+		var buf bytes.Buffer
+		// читаем тело запроса
+		n, err := buf.ReadFrom(r.Body)
+		if err != nil || n == 0 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
 		}
+		responseString := buf.String()
+		err = goluhn.Validate(responseString)
+		if err != nil {
+			logger.Infof("goluhn validate error: " + err.Error() + " - " + responseString)
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), repo.Timeout())
+		defer cancel()
+
+		orderUID, err := repo.GetOrder(ctx, responseString)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if userID == orderUID && orderUID != -1 {
+			w.WriteHeader(http.StatusOK)
+			return
+		} else if userID != orderUID && orderUID != -1 {
+			http.Error(w, "order already exists with another user", http.StatusConflict)
+			return
+		}
+
+		err = repo.AddOrder(ctx, userID, responseString)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
 	}
-	return http.HandlerFunc(fn)
+	return fn
 }
 
 func CheckOrders(FlagASAddr string, CheckOrdersTimeout time.Duration, db *postgres.DB) {

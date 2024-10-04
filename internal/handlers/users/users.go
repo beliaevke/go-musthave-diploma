@@ -64,7 +64,7 @@ func newRepo(id int, login string, pass string) database {
 	return usersrepo.NewUser(id, login, pass)
 }
 
-func UserRegisterHandler(db *postgres.DB) http.Handler {
+func UserRegisterHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var buf bytes.Buffer
@@ -74,7 +74,7 @@ func UserRegisterHandler(db *postgres.DB) http.Handler {
 			return
 		}
 
-		if r.Method != http.MethodPost || n == 0 {
+		if n == 0 {
 			return
 		}
 
@@ -120,10 +120,10 @@ func UserRegisterHandler(db *postgres.DB) http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	}
-	return http.HandlerFunc(fn)
+	return fn
 }
 
-func UserLoginHandler(db *postgres.DB) http.Handler {
+func UserLoginHandler(db *postgres.DB) func(w http.ResponseWriter, r *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var buf bytes.Buffer
@@ -133,7 +133,7 @@ func UserLoginHandler(db *postgres.DB) http.Handler {
 			return
 		}
 
-		if r.Method != http.MethodPost || n == 0 {
+		if n == 0 {
 			return
 		}
 
@@ -175,5 +175,5 @@ func UserLoginHandler(db *postgres.DB) http.Handler {
 		}
 		w.WriteHeader(http.StatusOK)
 	}
-	return http.HandlerFunc(fn)
+	return fn
 }
